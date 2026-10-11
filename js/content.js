@@ -28,7 +28,8 @@ window.SITE = {
     book: "U00 – U12", extra: "교재 밖 웹 조사 · 출처 R01–R10", dictTitle: "초보자 핵심 사전", quizNote: "자체 제작 연습문제, 기출 아님", scoreNote: "실제 예선 점수와 무관합니다.",
     sources: "S01~S24 = 교재 원본 출처(04_출처_목록.json) · R01~R10 = 보강 웹 조사(2026-10-12 원문 확인). 출처가 있다는 것은 개념의 근거라는 뜻이지 출제된다는 뜻이 아닙니다."
   },
-  features: { calc: true }
+  features: { calc: true },
+  resetEpoch: "2026-10-12-r1"   // 값을 바꾸면 모든 기기에서 진도(읽음·목표·문제·이어하기·계산기)를 한 번 초기화
 };
 
 (function () {

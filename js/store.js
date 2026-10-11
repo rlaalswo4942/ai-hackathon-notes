@@ -31,11 +31,23 @@
     return [...out];
   }
   const remote = () => mode === "sync" || mode === "server";
+
+  /* 진도 초기화: SITE.resetEpoch 값이 바뀌면 각 기기에서 처음 열 때 한 번 진도 기록을 지움 (필기·포스트잇은 유지) */
+  (function resetOnce() {
+    const epoch = window.SITE && SITE.resetEpoch; if (!epoch) return;
+    const EK = KEY + "-reset-epoch";
+    if (lsRaw(EK) === epoch) return;
+    const keys = (SITE.resetKeys || ["checks", "goals", "quiz", "last", "calc"]);
+    // 빈 값을 '지금' 시각으로 기록 → 동기화할 때 서버·다른 기기의 예전 진도보다 최신이라 초기화가 함께 퍼짐
+    const now = Date.now();
+    keys.forEach(k => lsSet(k, { t: now, v: null }));
+    lsRawSet(EK, epoch);
+  })();
   function lsRaw(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsRawSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
 
   const Store = {
-    get(k, def) { const r = lsGet(k); return r ? r.v : def; },
+    get(k, def) { const r = lsGet(k); return r && r.v != null ? r.v : def; },
     set(k, v) {
       const rec = { t: Date.now(), v };
       lsSet(k, rec);
