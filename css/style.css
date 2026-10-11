@@ -226,3 +226,87 @@ body.tool-eraser .ink-capture { cursor: cell; }
 @media (max-width: 900px) {
   body:not(.side-closed) #sidebar { position: absolute; height: 100%; box-shadow: 6px 0 24px rgba(0, 0, 0, .15); }
 }
+/* ── 사이드바 카테고리 · 홈 ── */
+.side-group { font-size: 11.5px; font-weight: 800; color: var(--sub); letter-spacing: .3px; padding: 12px 10px 4px; text-transform: uppercase; }
+.side-foot button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+.notice { background: #fff8e6; border: 1px solid #f5d48a; border-radius: var(--radius); padding: 12px 14px; font-size: 14px; line-height: 1.65; margin-bottom: 14px; }
+.start-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.start-row .big { border: 0; background: var(--accent); color: #fff; border-radius: 12px; padding: 12px 18px; font-size: 15.5px; font-weight: 800; box-shadow: var(--shadow); }
+.start-row .big.alt { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+.home h2.grp { font-size: 17px; margin: 22px 0 10px; }
+.home h2.grp small { font-weight: 500; color: var(--sub); font-size: 12.5px; margin-left: 6px; }
+.overall { flex-wrap: wrap; }
+.pill { border: 0; background: var(--accent); color: #fff; border-radius: 10px; padding: 8px 14px; font-weight: 700; font-size: 14px; }
+.pill.alt { background: var(--warn); }
+.pill.ghost { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+.pill:disabled { opacity: .45; }
+
+/* ── 교재 원문(마크다운) ── */
+.notes.md h1, .notes.md h2, .notes.md h3, .notes.md h4 { font-size: 17px; margin: 14px 0 6px; }
+.notes.md p { margin: 6px 0 10px; }
+.notes.md pre { background: #f4f6fb; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: keep-all; }
+.notes.md code { font-family: "D2Coding", Consolas, "Malgun Gothic", monospace; font-size: .92em; background: #f1f3f9; border-radius: 5px; padding: 0 4px; }
+.notes.md pre code { background: none; padding: 0; }
+.notes.md blockquote { margin: 8px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: #f8f9fd; border-radius: 0 10px 10px 0; }
+.notes.md hr { border: 0; border-top: 1px dashed var(--line); margin: 12px 0; }
+.formula { font-family: "Cambria Math", "Times New Roman", serif; font-size: 18px; text-align: center; background: #f8f9fd; border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 8px 0; }
+.tbl { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.sref { display: inline-block; font-size: 11.5px; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 0 5px; text-decoration: none; vertical-align: 1px; }
+.src .kind { font-size: 11px; background: var(--bg); border-radius: 5px; padding: 0 5px; margin-right: 4px; color: var(--sub); }
+
+/* ── 연습문제 ── */
+.modes { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 14px; }
+.modes button, .modes select { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 14px; font-size: 14.5px; font-weight: 700; box-shadow: var(--shadow); font-family: inherit; }
+.modes button small { color: var(--sub); font-weight: 500; margin-left: 4px; }
+.modes button:disabled { opacity: .45; }
+.qcard { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
+.qcard.empty { color: var(--sub); }
+.qcard h3 { font-size: 19px; line-height: 1.5; margin: 8px 0 12px; }
+.qmeta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--sub); }
+.qmeta span { background: var(--bg); border-radius: 6px; padding: 1px 8px; }
+.qmeta .lv { background: var(--accent-soft); color: var(--accent); font-weight: 800; }
+.choices { display: grid; gap: 8px; }
+.choice { text-align: left; border: 2px solid var(--line); background: #fff; border-radius: 12px; padding: 11px 14px; font-size: 15.5px; line-height: 1.5; }
+.choice:not(:disabled):hover { border-color: var(--accent); background: var(--accent-soft); }
+.choice b { color: var(--accent); margin-right: 4px; }
+.choice.right { border-color: var(--ok); background: var(--ok-soft); }
+.choice.wrong { border-color: #e03131; background: #fff0f0; }
+.choice.dim { opacity: .6; }
+.result { margin-top: 12px; font-weight: 800; font-size: 16px; }
+.result.ok { color: var(--ok); } .result.no { color: #e03131; }
+.expl { background: var(--bg); border-radius: 10px; padding: 10px 12px; margin-top: 8px; line-height: 1.65; }
+.origin { font-size: 12px; color: var(--sub); }
+.qnav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; }
+.qnav .hint { font-size: 13px; color: var(--sub); }
+.home table, .qtable { border-collapse: collapse; width: 100%; background: var(--panel); font-size: 14px; }
+.home th, .home td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+.home th { background: #f1f3f9; }
+
+/* ── 계산기 ── */
+.cm { display: grid; grid-template-columns: 110px 1fr 1fr; gap: 8px; max-width: 640px; margin: 12px 0; }
+.cm .hd { display: grid; place-items: center; font-weight: 800; font-size: 13.5px; color: var(--sub); background: var(--bg); border-radius: 10px; padding: 6px; text-align: center; }
+.cm .cell { background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 10px; display: grid; gap: 4px; }
+.cm .cell b { font-size: 18px; }
+.cm .cell.TP b, .cm .cell.TN b { color: var(--ok); } .cm .cell.FP b, .cm .cell.FN b { color: #e03131; }
+.cm .cell input { font: inherit; font-size: 20px; font-weight: 800; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 100%; }
+.cm .cell small { color: var(--sub); font-size: 12px; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 13px; margin-bottom: 12px; }
+.presets button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 9px; font-size: 13px; }
+.calc-t .res { font-size: 18px; font-weight: 900; color: var(--accent); white-space: nowrap; }
+.calc-t .na { color: #e03131; } .calc-t .res small { display: block; font-size: 12px; font-weight: 500; color: var(--sub); white-space: normal; }
+
+/* ── 사전 ── */
+.search { width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; font: inherit; font-size: 16px; margin: 6px 0 12px; }
+
+/* ── 동기화 창 ── */
+.modal { position: fixed; inset: 0; background: rgba(10, 12, 20, .5); z-index: 95; display: none; align-items: center; justify-content: center; padding: 16px; }
+.modal.show { display: flex; }
+.modal .box { background: var(--panel); border-radius: 18px; box-shadow: 0 10px 40px rgba(0, 0, 0, .25); padding: 20px 22px; width: min(440px, 100%); display: grid; gap: 8px; font-size: 14.5px; line-height: 1.6; }
+.modal h3 { margin: 0; font-size: 18px; }
+.modal p { margin: 0; } .modal .small { font-size: 12.5px; color: var(--sub); }
+.modal .state { font-weight: 700; }
+.modal input { height: 46px; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; font: inherit; font-size: 16px; }
+.modal .acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.modal .acts span { flex: 1; }
+.modal .acts button { border: 0; background: var(--accent); color: #fff; border-radius: 10px; padding: 9px 16px; font-weight: 800; }
+.modal .acts button.ghost { background: var(--bg); color: var(--ink); }
