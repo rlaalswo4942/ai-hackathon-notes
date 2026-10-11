@@ -14,7 +14,21 @@ window.SITE = {
   unit: "", unitPrefix: "", unitEn: "UNIT",
   by: "",
   key: "hynixai",
-  syncApi: "https://ai-hackathon-sync.vercel.app/api/state"
+  syncApi: "https://ai-hackathon-sync.vercel.app/api/state",
+  eyebrow: "SK하이닉스 AI 해커톤 2026 · 예선 대비",
+  notice: `<b>비공식 개인 학습자료</b> — SK하이닉스·운영사의 공식 교재나 기출문제가 아니며 특정 주제의 출제를 보장하지 않습니다.
+    <span class="lb off">공식공지</span> 1차 예선 <b>2026-10-17(토)~18(일) 중 하루, 온라인, 'AI 기초 지식 및 활용 역량 검증'</b>. 문제 수·시간·도구 허용 여부는 개별 응시 안내로 확인하세요.
+    <a href="https://skhynix-hackathon.com/ai-2026" target="_blank" rel="noopener">공식 페이지 ↗</a>`,
+  book: { // content/textbook.md 해석 규칙
+    start: "^공부를 시작하기 전에", startDesc: "읽는 법 · 공식 일정 · 전체 지도 · 5일 루트",
+    dict: "^초보자 핵심 사전",
+    reviewTitle: "한눈에 복습: 15쌍 비교 · 공식 · 25개 질문", reviewDesc: "헷갈리는 개념 비교, 계산 공식 한 장 정리, 스스로 확인할 질문, 출처와 검증 범위"
+  },
+  labels: {
+    book: "U00 – U12", extra: "교재 밖 웹 조사 · 출처 R01–R10", dictTitle: "초보자 핵심 사전", quizNote: "자체 제작 연습문제, 기출 아님", scoreNote: "실제 예선 점수와 무관합니다.",
+    sources: "S01~S24 = 교재 원본 출처(04_출처_목록.json) · R01~R10 = 보강 웹 조사(2026-10-12 원문 확인). 출처가 있다는 것은 개념의 근거라는 뜻이지 출제된다는 뜻이 아닙니다."
+  },
+  features: { calc: true }
 };
 
 (function () {

@@ -1,4 +1,4 @@
-/* AI 해커톤 학습노트 - 앱 본체
+/* 학습노트 엔진 - 앱 본체 (학습사이트_프레임과 공용. 과목별 내용·문구는 js/content.js 와 content/ 에서만 바꿈)
  * content/ 의 원본(교재 md·문제 json·출처 json)을 읽어 그대로 표시 + 보강 단원(js/content.js EXTRA)
  * 라우트: #home #guide #start #u00~#u12 #review #quiz(.U04) #calc #dict #sources #info #u13 #u14 #extra-review  (섹션: #u04.s03)
  */
@@ -11,12 +11,22 @@
 
   document.title = SITE.title;
   document.head.insertAdjacentHTML("beforeend", `<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>${SITE.icon}</text></svg>">`);
+  /* 교재 원고(md) 해석 규칙 · 화면 문구 — 과목마다 content.js 의 SITE.book / SITE.labels 로 바꿈 */
+  const BKraw = Object.assign({
+    start: "^시작하기", startDesc: "읽는 법 · 전체 지도", // '# 시작하기…' 블록 = START 단원 (섹션은 ##)
+    map: "## 전체 지도", mapDesc: "첫 목표", mapLevel: "난이도", // START 안의 단원 지도 표 → 홈 카드 설명·난이도
+    dict: "^용어 사전", goals: "오늘의 목표",                    // '# 용어 사전' 표 → 사전 페이지, '### 오늘의 목표' 목록 → 자가점검
+    reviewTitle: "한눈에 복습", reviewEn: "교재 끝부분", reviewDesc: "교재 끝의 정리·비교·확인 질문"
+  }, SITE.book || {});
+  const BK = Object.assign({}, BKraw, { start: new RegExp(BKraw.start), dict: new RegExp(BKraw.dict), goals: new RegExp(BKraw.goals), map: new RegExp(BKraw.map) });
+  const LB = Object.assign({ book: "", extra: "", extraGroup: "보강 자료", sources: "출처가 있다는 것은 개념의 근거라는 뜻입니다.", dictTitle: "용어 사전", calcTitle: "혼동행렬 계산기", quizNote: "자체 제작 연습문제", scoreNote: "실제 시험 점수와 무관합니다." }, SITE.labels || {});
+  const FEAT = Object.assign({ calc: false }, SITE.features || {});
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const tagOf = L => L.tag;
 
   /* ───────── 원본 불러오기 · 파싱 ───────── */
-  const COLORS = ["#64748b", "#5b5bd6", "#7c3aed", "#0891b2", "#dc2626", "#2563eb", "#db2777", "#ea580c", "#16a34a", "#9333ea", "#b91c1c", "#0d9488", "#4f46e5"];
-  const ICONS = ["", "", "", "", "", "", "", "", "", "", "", "", ""];
+
+
   const LABELS = { "공식공지": "off", "기술근거": "tech", "가상자료": "case", "가상사례": "case", "모든 상황은 가상": "case", "교육용 설명": "plan", "교육용 설계": "plan", "교육용 프레임": "plan", "교육용 템플릿": "plan", "근거 및 성격": "tech" };
   const KIND = { official_event: "행사 공식 사이트", secondary_event_reporting: "언론 보도", primary_technical: "AI 기술 자료", open_standard: "AI 기술 자료", standards_risk: "AI 기술 자료", security_owasp: "AI 기술 자료" };
 
@@ -66,32 +76,33 @@
     });
     PREFACE = pre.join("\n");
     const units = [], review = [];
-    blocks.forEach(b => {
+    blocks.forEach((b, bi) => {
       const body = b.lines.join("\n");
       const m = b.title.match(/^(U\d\d)\.\s*(.*)$/);
-      if (/^교재 소개|^AI 기초 지식/.test(b.title)) return;
-      if (/^초보자 핵심 사전/.test(b.title)) { DICT = parseTable(body); return; }
-      if (/^공부를 시작하기 전에/.test(b.title)) {
-        units.push(mkUnit("start", "START", b.title.replace(/^공부를 시작하기 전에:\s*/, "공부를 시작하기 전에: "), "읽는 법 · 공식 일정 · 전체 지도 · 5일 루트", "#0f172a", "", body));
-        const mapRows = parseTable(body.split(/## 전체 지도/)[1] || "");
-        mapRows.forEach(r => { const id = (r["단원"] || "").match(/U\d\d/); if (id) MAP[id[0]] = r; });
+      if (bi === 0 && !m) return; // 맨 처음 '# 제목'은 문서 제목 → 표시 안 함
+      if (BK.dict.test(b.title)) { DICT = parseTable(body); return; }
+      if (BK.start.test(b.title)) {
+        units.push(mkUnit("start", "START", b.title, BK.startDesc, "", "", body));
+        const mapRows = parseTable(body.split(BK.map)[1] || "");
+        mapRows.forEach(r => { const id = Object.values(r).join(" ").match(/U\d\d/); if (id) MAP[id[0]] = r; });
         return;
       }
       if (m) {
-        const n = +m[1].slice(1), r = MAP[m[1]] || {};
-        units.push(mkUnit(m[1].toLowerCase(), m[1], m[2], r["첫 목표"] || "", COLORS[n], ICONS[n], body, r["난이도"]));
+        const r = MAP[m[1]] || {};
+        units.push(mkUnit(m[1].toLowerCase(), m[1], m[2], r[BK.mapDesc] || "", "", "", body, r[BK.mapLevel]));
         return;
       }
       review.push({ t: b.title, raw: body.replace(/^\s*-{3,}\s*$/gm, "").trim() });
     });
-    const rv = { id: "review", tag: "REVIEW", title: "한눈에 복습: 15쌍 비교 · 공식 · 25개 질문", en: "교재 끝부분", color: "#334155", icon: "", desc: "헷갈리는 개념 비교, 계산 공식 한 장 정리, 스스로 확인할 질문, 출처와 검증 범위", book: true, goals: [] };
+    if (!review.length) return { units, review: null };
+    const rv = { id: "review", tag: "REVIEW", title: BK.reviewTitle, en: BK.reviewEn, color: "", icon: "", desc: BK.reviewDesc, book: true, goals: [] };
     rv.sections = review.map((s, i) => ({ id: "s" + String(i + 1).padStart(2, "0"), t: s.t, html: md(s.raw), src: citedIn(s.raw) }));
     return { units, review: rv };
   }
   function mkUnit(id, tag, title, desc, color, icon, body, level) {
     const secs = splitSections(body);
     let goals = [];
-    const g = secs.find(s => /오늘의 목표/.test(s.t));
+    const g = secs.find(s => BK.goals.test(s.t));
     if (g) goals = g.raw.split(/\r?\n/).filter(l => /^\s*(?:[-*]|\d+\.)\s+/.test(l)).map(stripMd);
     return {
       id, tag, title, en: level ? "난이도 · " + level : "", desc, color, icon, book: true, goals,
@@ -110,12 +121,12 @@
     main.innerHTML = `<div class="home"><p class="sub">교재를 불러오는 중…</p></div>`;
     try {
       const [t, q, s] = await Promise.all(["content/textbook.md", "content/questions.json", "content/sources.json"].map(u => fetch(u, { cache: "no-cache" }).then(r => { if (!r.ok) throw new Error(u + " " + r.status); return u.endsWith(".md") ? r.text() : r.json(); })));
-      s.sources.forEach(x => (SRC[x.id] = { t: `${x.organization} — ${x.title}`, u: x.url, kind: KIND[x.kind] || "AI 기술 자료", scope: x.scope }));
+      s.sources.forEach(x => (SRC[x.id] = { t: `${x.organization} — ${x.title}`, u: x.url, kind: KIND[x.kind] || x.kind || "참고 자료", scope: x.scope }));
       Object.entries(window.RESEARCH_SOURCES || {}).forEach(([id, x]) => (SRC[id] = x));
       QUESTIONS = q.questions; QNOTICE = q.notice;
       const b = parseBook(t);
       BOOK = b.units.filter(u => u.id !== "start");
-      UNITS = [...b.units, b.review, ...(window.EXTRA || [])];
+      UNITS = [...b.units, b.review, ...(window.EXTRA || [])].filter(Boolean);
     } catch (e) {
       main.innerHTML = `<div class="home"><h1>교재를 불러오지 못했어요</h1><p class="sub">${esc(e.message)} — 인터넷 연결을 확인하고 새로고침하세요. (파일을 직접 더블클릭해 열면 동작하지 않습니다)</p></div>`;
       return;
@@ -141,8 +152,8 @@
   const GROUPS = () => [
     { h: "시작", items: [{ id: "", t: "홈" }, { id: "guide", t: "사용법 · 동기화 안내" }, uItem("start")] },
     { h: "교재", items: BOOK.map(L => uItem(L.id)) },
-    { h: "연습 · 도구", items: [{ id: "quiz", t: "연습문제", sub: () => { const s = quizStats(); return `응답 ${s.graded}/${s.total}${s.pct != null ? " · 정답률 " + s.pct + "%" : ""}`; } }, { id: "calc", t: "혼동행렬 계산기" }, { id: "dict", t: "초보자 핵심 사전" }, uItem("review")] },
-    { h: "보강 자료", items: (window.EXTRA || []).map(L => uItem(L.id)) },
+    { h: "연습 · 도구", items: [QUESTIONS.length && { id: "quiz", t: "연습문제", sub: () => { const s = quizStats(); return `응답 ${s.graded}/${s.total}${s.pct != null ? " · 정답률 " + s.pct + "%" : ""}`; } }, FEAT.calc && { id: "calc", t: LB.calcTitle }, DICT.length && { id: "dict", t: LB.dictTitle }, uItem("review")] },
+    (window.EXTRA || []).length && { h: LB.extraGroup, items: (window.EXTRA || []).map(L => uItem(L.id)) },
     { h: "근거", items: [{ id: "sources", t: "출처 모음" }] }
   ];
   function uItem(id) { const L = UNITS.find(u => u.id === id); return L ? { id, t: L.title, L } : null; }
@@ -150,7 +161,7 @@
     const nav = document.getElementById("side-nav");
     const route = (parseHash()[0] || "").replace(/^home$/, "");
     let h = "";
-    GROUPS().forEach(g => {
+    GROUPS().filter(g => g && g.items.some(Boolean)).forEach(g => {
       h += `<div class="side-group">${g.h}</div>`;
       g.items.filter(Boolean).forEach(it => {
         const L = it.L;
@@ -173,21 +184,19 @@
 
   /* ───────── 홈 ───────── */
   function renderHome() {
-    const o = overall(BOOK), qs = quizStats(), last = Store.get("last", null), lastL = last && UNITS.find(u => u.id === last);
-    let h = `<div class="home"><p class="eyebrow">SK하이닉스 AI 해커톤 2026 · 예선 대비</p><h1>${esc(SITE.title)}</h1><p class="sub">${esc(SITE.sub)}</p>
-      <div class="start-row"><button class="big" data-go="#start">처음부터 시작하기</button>${lastL ? `<button class="big alt" data-go="#${lastL.id}">이어하기 · ${esc(tagOf(lastL))} ${esc(lastL.title)}</button>` : ""}<button class="big alt" data-go="#quiz">연습문제</button></div>
-      <div class="notice"><b>비공식 개인 학습자료</b> — SK하이닉스·운영사의 공식 교재나 기출문제가 아니며 특정 주제의 출제를 보장하지 않습니다.
-      <span class="lb off">공식공지</span> 1차 예선 <b>2026-10-17(토)~18(일) 중 하루, 온라인, 'AI 기초 지식 및 활용 역량 검증'</b>. 문제 수·시간·도구 허용 여부는 개별 응시 안내로 확인하세요.
-      <a href="${esc(SRC.S01 ? SRC.S01.u : "#")}" target="_blank" rel="noopener">공식 페이지 ↗</a></div>
-      <div class="stats"><div><small>교재 읽기</small><b>${o.pct}%</b><span>${o.n}/${o.t} 섹션</span></div><div><small>문제 정답률</small><b>${qs.pct != null ? qs.pct + "%" : "—"}</b><span>채점 ${qs.graded}/${qs.total} · 미응답 제외</span></div></div>
-      <h2 class="grp">교재 <small>U00 – U12</small></h2><div class="cat-grid">`;
+    const o = overall(BOOK), qs = quizStats(), last = Store.get("last", null), lastL = last && UNITS.find(u => u.id === last), firstL = UNITS.find(u => u.id === "start") || BOOK[0];
+    let h = `<div class="home">${SITE.eyebrow ? `<p class="eyebrow">${esc(SITE.eyebrow)}</p>` : ""}<h1>${esc(SITE.title)}</h1><p class="sub">${esc(SITE.sub)}</p>
+      <div class="start-row">${firstL ? `<button class="big" data-go="#${firstL.id}">처음부터 시작하기</button>` : ""}${lastL ? `<button class="big alt" data-go="#${lastL.id}">이어하기 · ${esc(tagOf(lastL))} ${esc(lastL.title)}</button>` : ""}${QUESTIONS.length ? `<button class="big alt" data-go="#quiz">연습문제</button>` : ""}</div>
+      ${SITE.notice ? `<div class="notice">${SITE.notice}</div>` : ""}
+      <div class="stats"><div><small>교재 읽기</small><b>${o.pct}%</b><span>${o.n}/${o.t} 섹션</span></div>${QUESTIONS.length ? `<div><small>문제 정답률</small><b>${qs.pct != null ? qs.pct + "%" : "—"}</b><span>채점 ${qs.graded}/${qs.total} · 미응답 제외</span></div>` : ""}</div>
+      <h2 class="grp">교재 <small>${esc(LB.book)}</small></h2><div class="cat-grid">`;
     BOOK.forEach(L => (h += card(L)));
     h += `</div><h2 class="grp">연습 · 복습</h2><div class="cat-grid">`;
-    h += tool("quiz", "PRACTICE", "연습문제 80문항", "입문·기본·응용·계산 · 단원별 · 오답 다시 풀기");
-    h += tool("calc", "TOOL", "혼동행렬 계산기", "TP·TN·FP·FN을 넣어 정확도·정밀도·재현율·F1 계산");
-    h += tool("dict", "TOOL", "초보자 핵심 사전", `교재의 용어 ${DICT.length}개 검색`);
-    h += card(UNITS.find(u => u.id === "review"));
-    h += `</div><h2 class="grp">보강 자료 <small>교재 밖 웹 조사 · 출처 R01–R10</small></h2><div class="cat-grid">`;
+    if (QUESTIONS.length) h += tool("quiz", "PRACTICE", `연습문제 ${QUESTIONS.length}문항`, "입문·기본·응용·계산 · 단원별 · 오답 다시 풀기");
+    if (FEAT.calc) h += tool("calc", "TOOL", LB.calcTitle, "TP·TN·FP·FN을 넣어 정확도·정밀도·재현율·F1 계산");
+    if (DICT.length) h += tool("dict", "TOOL", LB.dictTitle, `교재의 용어 ${DICT.length}개 검색`);
+    const rvL = UNITS.find(u => u.id === "review"); if (rvL) h += card(rvL);
+    h += `</div><h2 class="grp">${esc(LB.extraGroup)} <small>${esc(LB.extra)}</small></h2><div class="cat-grid">`;
     (window.EXTRA || []).forEach(L => (h += card(L)));
     h += `</div></div>`;
     main.innerHTML = h;
@@ -231,7 +240,7 @@
       goals.forEach((g, i) => (h += `<div class="ck goal ${gs[i] ? "done" : ""}" data-goal="${i}"><span class="num">${i + 1}</span><span class="box"></span><span class="lbl">${esc(g)}</span></div>`));
       h += `</div></div>`;
     }
-    if (qn) { const qs = quizStats(L.tag); h += `<div class="card" id="quizcard"><h2>이 단원 확인 문제</h2><p>${qn}문항 · 채점 ${qs.graded}개 · 정답률 ${qs.pct != null ? qs.pct + "%" : "—"} <small>(자체 제작 연습문제, 기출 아님)</small></p><button class="pill" data-go="#quiz.${L.tag}">문제 풀기 ›</button></div>`; }
+    if (qn) { const qs = quizStats(L.tag); h += `<div class="card" id="quizcard"><h2>이 단원 확인 문제</h2><p>${qn}문항 · 채점 ${qs.graded}개 · 정답률 ${qs.pct != null ? qs.pct + "%" : "—"} <small>(${esc(LB.quizNote)})</small></p><button class="pill" data-go="#quiz.${L.tag}">문제 풀기 ›</button></div>`; }
     const seq = UNITS, idx = seq.indexOf(L), prev = seq[idx - 1], next = seq[idx + 1];
     h += `<div class="pn" id="pn">${prev ? `<button data-go="#${prev.id}"><small>‹ 이전</small>${esc(prev.tag)} ${esc(prev.title)}</button>` : "<span></span>"}${next ? `<button data-go="#${next.id}"><small>다음 ›</small>${esc(next.tag)} ${esc(next.title)}</button>` : `<button data-go="#home"><small>마지막</small>홈으로</button>`}</div>`;
 
@@ -302,7 +311,7 @@
     if (topic && QS && (QS.mode !== "unit" || QS.topic !== topic)) QS = { mode: "unit", topic, list: quizList("unit", topic), i: 0, answered: {} };
     const s = quizStats(), st = quizSt(), wrongN = QUESTIONS.filter(q => st[q.id] && !st[q.id].ok).length;
     let h = `<div class="home quiz"><h1>연습문제</h1>
-      <div class="notice"><b>${esc(QNOTICE)}</b> 정답률은 <b>정답 수 ÷ 채점된 응답 수 × 100</b>(미응답 제외)이며 실제 예선 점수와 무관합니다.</div>
+      <div class="notice"><b>${esc(QNOTICE)}</b> 정답률은 <b>정답 수 ÷ 채점된 응답 수 × 100</b>(미응답 제외)이며 ${esc(LB.scoreNote)}</div>
       <div class="overall"><b>전체</b><span class="bar"><i style="width:${s.total ? s.graded / s.total * 100 : 0}%"></i></span><small>채점 ${s.graded}/${s.total}</small><b>정답률 ${s.pct != null ? s.pct + "%" : "—"}</b>${wrongN ? `<small>오답 ${wrongN}개</small>` : ""}</div>
       <div class="modes">
         <button data-mode="basic">기본 모드 <small>입문·기본 ${QUESTIONS.filter(q => LEVEL_MODES.basic.includes(q.level)).length}</small></button>
@@ -366,7 +375,7 @@
   /* ───────── 혼동행렬 계산기 ───────── */
   function renderCalc() {
     const v = Store.get("calc", { TP: 8, TN: 85, FP: 5, FN: 2 });
-    main.innerHTML = `<div class="home calc"><h1>혼동행렬 계산기</h1>
+    main.innerHTML = `<div class="home calc"><h1>${esc(LB.calcTitle)}</h1>
       <p class="sub">먼저 <b>무엇을 양성(Positive)으로 볼지</b> 정하세요. 예: 불량 = 양성. 값은 0 이상의 정수, 결과는 소수점 둘째 자리 반올림.</p>
       <div class="cm">
         <div></div><div class="hd">예측: 양성</div><div class="hd">예측: 음성</div>
@@ -397,12 +406,13 @@
 
   /* ───────── 사전 ───────── */
   function renderDict() {
-    main.innerHTML = `<div class="home dict"><h1>초보자 핵심 사전</h1><p class="sub">교재 원문의 용어 ${DICT.length}개. 처음 배울 단원을 누르면 이동합니다.</p>
-      <input class="search" type="search" placeholder="용어 검색 (예: 재현율, RAG, 토큰)" data-q><div class="tbl"><table class="dict-t"><thead><tr><th>용어</th><th>가장 쉬운 풀이</th><th>처음 배울 곳</th></tr></thead><tbody></tbody></table></div></div>`;
+    const DCOLS = Object.keys(DICT[0] || {}); // 사전 표의 열 이름을 그대로 사용 (첫 열 = 용어)
+    main.innerHTML = `<div class="home dict"><h1>${esc(LB.dictTitle)}</h1><p class="sub">교재 원문의 용어 ${DICT.length}개. 처음 배울 단원을 누르면 이동합니다.</p>
+      <input class="search" type="search" placeholder="용어 검색" data-q><div class="tbl"><table class="dict-t"><thead><tr>${DCOLS.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody></tbody></table></div></div>`;
     const tb = main.querySelector("tbody");
     const draw = q => {
       q = (q || "").trim().toLowerCase();
-      tb.innerHTML = DICT.filter(r => !q || Object.values(r).join(" ").toLowerCase().includes(q)).map(r => `<tr><td><b>${esc(r["용어"])}</b></td><td>${esc(r["가장 쉬운 풀이"])}</td><td>${esc(r["처음 배울 곳"]).replace(/U\d\d/g, m => `<a href="#${m.toLowerCase()}">${m}</a>`)}</td></tr>`).join("") || `<tr><td colspan="3">찾는 용어가 없어요</td></tr>`;
+      tb.innerHTML = DICT.filter(r => !q || Object.values(r).join(" ").toLowerCase().includes(q)).map(r => `<tr>${DCOLS.map((c, i) => `<td>${i ? "" : "<b>"}${esc(r[c]).replace(/U\d\d/g, m => `<a href="#${m.toLowerCase()}">${m}</a>`)}${i ? "" : "</b>"}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${DCOLS.length}">찾는 용어가 없어요</td></tr>`;
     };
     main.querySelector("[data-q]").addEventListener("input", e => draw(e.target.value));
     draw("");
@@ -413,8 +423,8 @@
     const used = {};
     UNITS.forEach(L => L.sections.forEach(s => (s.src || []).forEach(id => ((used[id] = used[id] || new Set()).add(L.tag)))));
     QUESTIONS.forEach(q => (q.sourceIds || []).forEach(id => ((used[id] = used[id] || new Set()).add("문제"))));
-    const groups = ["행사 공식 사이트", "언론 보도", "AI 기술 자료", "기업 공식 자료"];
-    let h = `<div class="home srcs"><h1>출처 모음</h1><p class="sub">S01~S24 = 교재 원본 출처(04_출처_목록.json) · R01~R10 = 보강 웹 조사(2026-10-12 원문 확인). 출처가 있다는 것은 개념의 근거라는 뜻이지 출제된다는 뜻이 아닙니다.</p>`;
+    const groups = [...new Set(Object.values(SRC).map(s => s.kind))]; // 출처의 kind 별로 묶음 (나온 순서대로)
+    let h = `<div class="home srcs"><h1>출처 모음</h1><p class="sub">${esc(LB.sources)}</p>`;
     groups.forEach(g => {
       const ids = Object.keys(SRC).filter(id => SRC[id].kind === g).sort();
       if (!ids.length) return;
@@ -427,8 +437,8 @@
   function renderGuide() {
     main.innerHTML = `<div class="home guide"><h1>사용법</h1>
       <div class="howto"><h3>공부 순서</h3>
-      홈의 <b>처음부터 시작하기</b> → U00 → U01 … U12 순서로 읽고, 각 단원 끝의 <b>확인 문제</b>로 점검하세요. 섹션을 다 읽으면 <b>읽음</b>을 눌러 진도를 기록합니다.
-      홈 카드에는 <b>읽음 진도</b>와 <b>문제 정답률</b>이 따로 표시됩니다. 모르는 용어는 <a href="#dict">초보자 사전</a>, 계산 연습은 <a href="#calc">계산기</a>.</div>
+      홈의 <b>처음부터 시작하기</b>를 누르고 교재 단원을 순서대로 읽고, 각 단원 끝의 <b>확인 문제</b>로 점검하세요. 섹션을 다 읽으면 <b>읽음</b>을 눌러 진도를 기록합니다.
+      홈 카드에는 <b>읽음 진도</b>와 <b>문제 정답률</b>이 따로 표시됩니다. ${DICT.length ? `모르는 용어는 <a href="#dict">${esc(LB.dictTitle)}</a>에서 찾으세요.` : ""}</div>
       <div class="howto"><h3>기기 간 실시간 동기화</h3>
       왼쪽 목차 아래 <b>동기화 설정</b>에서 <b>동기화 코드</b>(6자 이상, 나만 아는 문구)를 입력하세요. 노트북·갤럭시탭 등 <b>같은 코드를 입력한 모든 기기</b>에서 필기·읽음 체크·목표 점검·문제 기록이 몇 초 안에 똑같이 보입니다.<br>
       • 코드는 비밀번호처럼 다루세요. 같은 코드를 아는 사람은 같은 필기를 보고 고칠 수 있어요.<br>
@@ -516,9 +526,9 @@
     main.scrollTop = 0;
     const L = UNITS.find(l => l.id === id);
     if (L) { crumb.innerHTML = `${esc(L.tag)} · ${esc(L.title)}<small>${esc(L.en || "")}</small>`; renderLecture(L, parts[1]); }
-    else if (id === "quiz") { crumb.innerHTML = `연습문제<small>자체 제작 · 기출 아님</small>`; if (!parts[1] && QS && QS.mode === "unit") QS = null; renderQuiz(parts[1]); }
-    else if (id === "calc") { crumb.innerHTML = `혼동행렬 계산기`; renderCalc(); }
-    else if (id === "dict") { crumb.innerHTML = `초보자 핵심 사전`; renderDict(); }
+    else if (id === "quiz") { crumb.innerHTML = `연습문제<small>${esc(LB.quizNote)}</small>`; if (!parts[1] && QS && QS.mode === "unit") QS = null; renderQuiz(parts[1]); }
+    else if (id === "calc" && FEAT.calc) { crumb.innerHTML = esc(LB.calcTitle); renderCalc(); }
+    else if (id === "dict") { crumb.innerHTML = esc(LB.dictTitle); renderDict(); }
     else if (id === "sources") { crumb.innerHTML = `출처 모음`; renderSources(); }
     else if (id === "guide") { crumb.innerHTML = `사용법`; renderGuide(); }
     else { crumb.innerHTML = `${esc(SITE.title)}`; renderHome(); }

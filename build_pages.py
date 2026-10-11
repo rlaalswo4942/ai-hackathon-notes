@@ -28,7 +28,9 @@ def enc_write(rel, data):
         f.write(iv + aes.encrypt(iv, data, None))
 
 files = []
-for d in ["css", "js", "img"]:
+for d in ["css", "js", "img", "content", "vendor"]:
+    if not os.path.isdir(os.path.join(SRC, d)):
+        continue
     for dp, _, fs in os.walk(os.path.join(SRC, d)):
         for f in fs:
             files.append(os.path.relpath(os.path.join(dp, f), SRC).replace("\\", "/"))
