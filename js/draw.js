@@ -5,15 +5,31 @@
   const NS = "http://www.w3.org/2000/svg";
   const PEN_COLORS = ["#1f2937", "#e03131", "#1971c2", "#2f9e44", "#7048e8", "#f08c00", "#d6336c", "#0c8599", "#868e96"];
   const HL_COLORS = ["#ffe066", "#8ce99a", "#ffa8c5", "#a5d8ff", "#ffc078", "#d0bfff"];
-  const MASK_COLORS = ["#6c5ce7", "#495057", "#e8590c", "#0c8599"];
+  const MASK_COLORS = ["#3a3a3c", "#6c5ce7", "#e8590c", "#0c8599"];
   const WIDTHS = { pen: [2, 3.5, 6], hl: [12, 20, 30], mask: [14, 22, 34] };
   const RANGES = { pen: [1, 16, 0.5], hl: [6, 44, 1], mask: [8, 48, 1] }; // 굵기 슬라이더 최소·최대·간격
+  // 무채색 선 아이콘 (stroke = currentColor)
+  const svg = d => `<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const ICO = {
+    read: svg('<path d="M5 3l12 7-5.5 1.5L9 17z"/><path d="M11.5 11.5L16 18"/>'),
+    pen: svg('<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>'),
+    hl: svg('<path d="M9 15l-3 3h5l1-1"/><path d="M9 15l6-10 4 2.5-5 10z"/><path d="M4 21h16" stroke-width="2.6" opacity=".35"/>'),
+    mask: svg('<rect x="3.5" y="8" width="17" height="8" rx="2"/><path d="M7 12h10" stroke-width="3" opacity=".35"/>'),
+    eraser: svg('<path d="M7 19l-3-3 9.5-9.5a2 2 0 012.8 0l2.2 2.2a2 2 0 010 2.8L12 18"/><path d="M7 19h12"/><path d="M8.5 11l5 5"/>'),
+    undo: svg('<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-4"/>'),
+    redo: svg('<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 000 10h4"/>'),
+    snap: svg('<path d="M6 4v7a6 6 0 0012 0V4"/><path d="M6 8h4M14 8h4"/>'),
+    penOnly: svg('<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M3 3l18 18" opacity=".5"/>'),
+    reveal: svg('<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>'),
+    clear: svg('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'),
+    collapse: svg('<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>')
+  };
   const TOOLS = [
-    { id: "read", ico: "👆", lab: "읽기", key: "v" },
-    { id: "pen", ico: "✏️", lab: "펜", key: "p" },
-    { id: "hl", ico: "🖍️", lab: "형광펜", key: "h" },
-    { id: "mask", ico: "🙈", lab: "가림펜", key: "m" },
-    { id: "eraser", ico: "🧽", lab: "지우개", key: "e" }
+    { id: "read", ico: ICO.read, lab: "읽기", key: "v" },
+    { id: "pen", ico: ICO.pen, lab: "펜", key: "p" },
+    { id: "hl", ico: ICO.hl, lab: "형광펜", key: "h" },
+    { id: "mask", ico: ICO.mask, lab: "가림펜", key: "m" },
+    { id: "eraser", ico: ICO.eraser, lab: "지우개", key: "e" }
   ];
   const defOpts = { tool: "read", pen: { c: PEN_COLORS[0], w: 3.5 }, hl: { c: HL_COLORS[0], w: 20 }, mask: { c: MASK_COLORS[0], w: 22 }, snap: true, penOnly: false, collapsed: false };
   let opts = Object.assign({}, defOpts, Store.get("inkopts", {}));
@@ -30,13 +46,13 @@
     dot = document.createElement("div"); dot.className = "eraser-dot";
     let h = "";
     TOOLS.forEach(t => (h += `<button class="tb" data-tool="${t.id}" title="${t.lab} (${t.key.toUpperCase()})">${t.ico}<small>${t.lab}</small>${t.id === "pen" || t.id === "hl" || t.id === "mask" ? '<i class="cdot"></i>' : ""}</button>`));
-    h += `<hr><button class="tb" data-act="undo" title="실행취소 (Ctrl+Z)">↶<small>취소</small></button>
-      <button class="tb" data-act="redo" title="다시실행 (Ctrl+Y)">↷<small>재실행</small></button><hr>
-      <button class="tb toggle" data-act="snap" title="형광펜·가림펜을 글자/그림 크기에 맞춤">🧲<small>스냅</small></button>
-      <button class="tb toggle" data-act="penOnly" title="손가락은 스크롤, 펜으로만 필기 (아이패드/갤럭시탭)">🖊️<small>펜전용</small></button>
-      <button class="tb" data-act="reveal" title="이 페이지의 가림 전체 보기/가리기">👁️<small>전체보기</small></button>
-      <button class="tb" data-act="clear" title="이 페이지 필기 모두 지우기">🗑️<small>전체삭제</small></button><hr>
-      <button class="tb keep" data-act="collapse" title="툴바 접기/펼치기">↕️<small>접기</small></button>`;
+    h += `<hr><button class="tb" data-act="undo" title="실행취소 (Ctrl+Z)">${ICO.undo}<small>취소</small></button>
+      <button class="tb" data-act="redo" title="다시실행 (Ctrl+Y)">${ICO.redo}<small>재실행</small></button><hr>
+      <button class="tb toggle" data-act="snap" title="형광펜·가림펜을 글자/그림 크기에 맞춤">${ICO.snap}<small>스냅</small></button>
+      <button class="tb toggle" data-act="penOnly" title="손가락은 스크롤, 펜으로만 필기 (아이패드/갤럭시탭)">${ICO.penOnly}<small>펜전용</small></button>
+      <button class="tb" data-act="reveal" title="이 페이지의 가림 전체 보기/가리기">${ICO.reveal}<small>전체보기</small></button>
+      <button class="tb" data-act="clear" title="이 페이지 필기 모두 지우기">${ICO.clear}<small>전체삭제</small></button><hr>
+      <button class="tb keep" data-act="collapse" title="툴바 접기/펼치기">${ICO.collapse}<small>접기</small></button>`;
     bar.innerHTML = h;
     document.body.append(bar, pop);
     bar.addEventListener("click", e => {
@@ -51,8 +67,8 @@
       const a = b.dataset.act;
       if (a === "undo") undo();
       else if (a === "redo") redo();
-      else if (a === "snap") { opts.snap = !opts.snap; saveOpts(); syncBar(); App.toast(opts.snap ? "🧲 스냅 켜짐: 형광펜·가림펜이 글자/그림 크기에 맞춰집니다" : "스냅 꺼짐: 그린 모양 그대로"); }
-      else if (a === "penOnly") { opts.penOnly = !opts.penOnly; saveOpts(); syncBar(); App.toast(opts.penOnly ? "🖊️ 펜 전용: 손가락으로는 스크롤, 펜으로만 필기" : "펜 전용 꺼짐: 손가락으로도 필기"); }
+      else if (a === "snap") { opts.snap = !opts.snap; saveOpts(); syncBar(); App.toast(opts.snap ? "스냅 켜짐: 형광펜·가림펜이 글자/그림 크기에 맞춰집니다" : "스냅 꺼짐: 그린 모양 그대로"); }
+      else if (a === "penOnly") { opts.penOnly = !opts.penOnly; saveOpts(); syncBar(); App.toast(opts.penOnly ? "펜 전용: 손가락으로는 스크롤, 펜으로만 필기" : "펜 전용 꺼짐: 손가락으로도 필기"); }
       else if (a === "reveal") revealAll();
       else if (a === "clear") clearPage();
       else if (a === "collapse") { opts.collapsed = !opts.collapsed; saveOpts(); syncBar(); hidePop(); }
@@ -328,13 +344,13 @@
     const anyClosed = masks.some(m => !m.open);
     masks.forEach(m => (m.open = anyClosed));
     renderAll(); save();
-    App.toast(anyClosed ? "👁️ 모든 가림을 열었어요" : "🙈 모든 가림을 다시 가렸어요");
+    App.toast(anyClosed ? "모든 가림을 열었어요" : "모든 가림을 다시 가렸어요");
   }
   function clearPage() {
     if (!C || !C.items.length) return App.toast("지울 필기가 없어요");
     // 브라우저 확인창 대신: 3초 안에 한 번 더 누르면 삭제
     const now = Date.now();
-    if (!clearPage.armed || now - clearPage.armed > 3000) { clearPage.armed = now; return App.toast("🗑️ 한 번 더 누르면 이 페이지 필기를 모두 지워요 (취소 ↶로 복구 가능)"); }
+    if (!clearPage.armed || now - clearPage.armed > 3000) { clearPage.armed = now; return App.toast("한 번 더 누르면 이 페이지 필기를 모두 지워요 (취소 ↶로 복구 가능)"); }
     clearPage.armed = 0;
     C.undo.push({ op: "del", items: C.items }); C.items = []; renderAll(); save();
   }

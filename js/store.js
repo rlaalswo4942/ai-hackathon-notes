@@ -61,7 +61,7 @@
       if (!ok) { lsRawSet(SPACE_KEY, null); mode = "local"; }
       return ok;
     },
-    syncDisconnect() { stopPoll(); flush(); lsRawSet(SPACE_KEY, null); space = null; mode = "local"; setSync("💾 이 기기에만 저장 (동기화 꺼짐)"); },
+    syncDisconnect() { stopPoll(); flush(); lsRawSet(SPACE_KEY, null); space = null; mode = "local"; setSync("이 기기에만 저장 (동기화 꺼짐)"); },
     async flushNow() { await flush(); },
     async init() {
       if (API && lsRaw(SPACE_KEY)) { const ok = await initSync().catch(() => false); if (ok) return mode; }
@@ -105,7 +105,7 @@
     merge(j.items || {});
     queueNewerLocal(j.items || {});
     startPoll();
-    setSync("🟢 실시간 동기화 중");
+    setSync("실시간 동기화 중");
     return true;
   }
   function startPoll() {
@@ -122,8 +122,8 @@
       const j = await r.json();
       since = Math.max(since, j.now || 0);
       merge(j.items || {});
-      setSync("🟢 실시간 동기화 중");
-    } catch (e) { setSync("🟠 동기화 서버 연결 끊김 — 이 기기에 저장 후 다시 보냄"); }
+      setSync("실시간 동기화 중");
+    } catch (e) { setSync("동기화 서버 연결 끊김 — 이 기기에 저장 후 다시 보냄"); }
     finally { polling = false; }
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && mode === "sync") poll(); });
@@ -142,7 +142,7 @@
     return true;
   }
   async function pollServer() {
-    try { const r = await fetch("api/state", { cache: "no-store" }); if (r.ok) merge(await r.json()); setSync("🟢 기기 간 동기화 중 (노트북 서버)"); } catch (e) { setSync("🟠 서버 연결 끊김 — 이 기기에 임시 저장"); }
+    try { const r = await fetch("api/state", { cache: "no-store" }); if (r.ok) merge(await r.json()); setSync("기기 간 동기화 중 (노트북 서버)"); } catch (e) { setSync("서버 연결 끊김 — 이 기기에 임시 저장"); }
   }
 
   function scheduleFlush() { clearTimeout(flushTimer); flushTimer = setTimeout(flush, 700); }
@@ -155,9 +155,9 @@
     const url = mode === "sync" ? `${API}?space=${space}` : "api/state";
     try {
       const r = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: JSON.stringify(body).length < 60000 });
-      if (r.ok) { keys.forEach(k => { if (pending[k] === body[k]) delete pending[k]; }); setSync(mode === "sync" ? "🟢 실시간 동기화 중" : "🟢 기기 간 동기화 중 (노트북 서버)"); }
-      else { setSync("🟠 저장 실패 — 이 기기에 임시 저장, 잠시 후 다시 보냄"); setTimeout(scheduleFlush, 4000); }
-    } catch (e) { setSync("🟠 연결 끊김 — 이 기기에 임시 저장, 잠시 후 다시 보냄"); setTimeout(scheduleFlush, 4000); }
+      if (r.ok) { keys.forEach(k => { if (pending[k] === body[k]) delete pending[k]; }); setSync(mode === "sync" ? "실시간 동기화 중" : "기기 간 동기화 중 (노트북 서버)"); }
+      else { setSync("저장 실패 — 이 기기에 임시 저장, 잠시 후 다시 보냄"); setTimeout(scheduleFlush, 4000); }
+    } catch (e) { setSync("연결 끊김 — 이 기기에 임시 저장, 잠시 후 다시 보냄"); setTimeout(scheduleFlush, 4000); }
     finally { flushing = false; }
   }
   function setSync(text) { const el = document.getElementById("sync-state"); if (el) el.textContent = text; }

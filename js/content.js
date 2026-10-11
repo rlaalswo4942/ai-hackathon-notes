@@ -9,7 +9,7 @@
  */
 window.SITE = {
   title: "AI 해커톤 학습노트",
-  icon: "🧠",
+  icon: "",
   sub: "AI 기초 지식 및 활용 역량 — 처음 배우는 사람을 위한 단계별 학습",
   unit: "", unitPrefix: "", unitEn: "UNIT",
   by: "",
@@ -36,7 +36,7 @@ window.SITE = {
 
   window.EXTRA = [
   {
-   id: "info", tag: "P1", title: "대회 정보 보강", en: "자격 · 혜택 · 보도된 평가 방식", color: "#0f766e", icon: "📅",
+   id: "info", tag: "P1", title: "대회 정보 보강", en: "자격 · 혜택 · 보도된 평가 방식", color: "#0f766e", icon: "",
    desc: "교재 첫 부분(공식 일정)에 없는 참가 자격·혜택·운영 주체와, 언론에 보도된 평가 방식",
    goals: ["공식 공지와 언론 보도, 미확인 사항을 구분할 수 있다"],
    sections: [
@@ -59,7 +59,7 @@ window.SITE = {
    ]
   },
   {
-   id: "u13", tag: "P2", title: "AI Native 협업 방식", en: "Cofa-Probe · Workflows · Agents", color: "#c2410c", icon: "🤝",
+   id: "u13", tag: "P2", title: "AI Native 협업 방식", en: "Cofa-Probe · Workflows · Agents", color: "#c2410c", icon: "",
    desc: "보도된 평가 도구의 3축, 워크플로·에이전트 패턴, 코딩 에이전트 실무 원칙 — 2차 예선·본선 대비",
    goals: ["Cofa-Probe 3축(Technique·Intent·Cognition)과 각 축에 대응하는 교재 단원을 말할 수 있다", "5가지 워크플로 패턴과 에이전트를 구분한다", "AI에게 맡길 작업을 Goal·Context·Constraints·Done when으로 정의할 수 있다"],
    sections: [
@@ -113,7 +113,7 @@ window.SITE = {
    ]
   },
   {
-   id: "u14", tag: "P3", title: "SK하이닉스 기업 분석", en: "Company · HBM · Fab AI", color: "#e11d48", icon: "💾",
+   id: "u14", tag: "P3", title: "SK하이닉스 기업 분석", en: "Company · HBM · Fab AI", color: "#e11d48", icon: "",
    desc: "회사 연혁, AI 메모리(HBM)와 TSV·MR-MUF, 2026년 2분기 실적, 제조 현장의 AI 활용 — 본선 대비",
    goals: ["SK하이닉스의 주력 제품과 HBM의 구조를 설명할 수 있다", "AI 시대에 메모리가 중요한 이유를 말할 수 있다", "반도체 제조 현장에서 AI가 쓰이는 사례를 데이터 관점으로 설명할 수 있다"],
    sections: [
@@ -168,7 +168,7 @@ window.SITE = {
    ]
   },
   {
-   id: "extra-review", tag: "P4", title: "보강 카드 · 비교분석", en: "v1 · v2 · 웹 조사 비교", color: "#475569", icon: "🗒️",
+   id: "extra-review", tag: "P4", title: "보강 카드 · 비교분석", en: "v1 · v2 · 웹 조사 비교", color: "#475569", icon: "",
    desc: "보강 자료의 외울 문장, 교재 v1·v2·웹 조사 비교 결과와 반영 원칙",
    goals: ["보강 카드 K1~K6을 보지 않고 말할 수 있다"],
    sections: [
@@ -182,7 +182,7 @@ window.SITE = {
       <tr><td>K5</td><td>HBM은 여러 D램을 TSV로 수직 연결·적층한 고대역폭 메모리다.</td><td>R07, R10</td></tr>
       <tr><td>K6</td><td>가상 계측은 장비 센서 데이터로 공정 결과를 예측해 전수 검사에 가까운 효과를 낸다.</td><td>R09</td></tr>
      </table>
-     <p><small>🙈 가림펜으로 가운데 열을 가리고 ID만 보고 말해 보세요. 탭하면 정답이 보입니다.</small></p>` },
+     <p><small>가림펜으로 가운데 열을 가리고 ID만 보고 말해 보세요. 탭하면 정답이 보입니다.</small></p>` },
     { id: "compare", t: "자료 비교와 반영 결과", h: `
      <table>
       <tr><th>자료</th><th>구성</th><th>이 사이트 반영</th></tr>
