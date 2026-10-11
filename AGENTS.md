@@ -4,6 +4,9 @@
 빌드 도구 없음(순수 HTML/JS). 노트북 Chrome + 태블릿에서 필기하며 공부.
 
 ## 실행
+- **웹(정본)**: https://rlaalswo4942.github.io/ai-hackathon-notes/ — GitHub Pages(공개 저장소 rlaalswo4942/ai-hackathon-notes, main 루트), 입장 코드 없음, noindex. 수정 후 커밋·푸시하면 1~2분 뒤 반영
+- 웹에선 기기별 브라우저 저장 → 노트북↔갤탭 이동은 💾 백업 저장 / 📂 불러오기
+- 해부학_필기노트와는 사용자가 달라 **서로 링크·연결 금지**
 - `학습노트_열기.bat` → `server.py`(포트 **8766**, 해부학노트 8765와 분리) + Chrome
 - 태블릿: 같은 와이파이에서 `http://<노트북IP>:8766`
 - 저장 키 접두어 `hynixai:` (content.js `SITE.key`) — 다른 노트와 localStorage가 섞이지 않게 사이트마다 다르게
