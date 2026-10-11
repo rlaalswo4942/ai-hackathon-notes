@@ -1,29 +1,31 @@
 # AI 해커톤 학습노트 (SK하이닉스 AI 해커톤 2026 예선 대비)
 
-해부학_필기노트의 엔진(필기·체크리스트·동기화·암호화 배포)을 그대로 가져와 내용만 바꾼 공부용 사이트. 3D 모형은 제외.
-빌드 도구 없음(순수 HTML/JS). 노트북 Chrome + 태블릿에서 필기하며 공부.
+해부학_필기노트의 엔진(필기·체크리스트·동기화)을 가져와 만든 별도 공부 사이트. 3D 모형 없음. 빌드 도구 없음(순수 HTML/JS).
+해부학_필기노트와는 공부하는 사람이 달라 **서로 링크·연결 금지**.
 
-## 실행
-- **웹(정본)**: https://rlaalswo4942.github.io/ai-hackathon-notes/ — GitHub Pages(공개 저장소 rlaalswo4942/ai-hackathon-notes, main 루트), 입장 코드 없음, noindex. 수정 후 커밋·푸시하면 1~2분 뒤 반영
-- 웹에선 기기별 브라우저 저장 → 노트북↔갤탭 이동은 💾 백업 저장 / 📂 불러오기
-- 해부학_필기노트와는 사용자가 달라 **서로 링크·연결 금지**
-- `학습노트_열기.bat` → `server.py`(포트 **8766**, 해부학노트 8765와 분리) + Chrome
-- 태블릿: 같은 와이파이에서 `http://<노트북IP>:8766`
-- 저장 키 접두어 `hynixai:` (content.js `SITE.key`) — 다른 노트와 localStorage가 섞이지 않게 사이트마다 다르게
+## 주소 · 배포
+- **웹(정본)**: https://rlaalswo4942.github.io/ai-hackathon-notes/ — GitHub Pages(공개 repo rlaalswo4942/ai-hackathon-notes, main 루트), 입장 코드 없음, noindex. 커밋·푸시 후 1~2분 뒤 반영
+- **동기화 API**: https://ai-hackathon-sync.vercel.app/api/state — `sync-api/` (Vercel 프로젝트 ai-hackathon-sync, 계정 rlaalswo4942-create), DB = Neon 프로젝트 `ai-hackathon-notes`(id long-queen-95331418, org-shy-pine-60967716) 테이블 `note_state(space,k,t,v,updated_at)`
+  - 배포: `cd sync-api && vercel deploy --prod --yes`. DATABASE_URL은 Vercel 환경변수(Sensitive). **PowerShell 파이프로 env add 하면 값이 깨짐** → node로 stdin에 개행 없이 써서 등록했음
+  - CORS 허용: rlaalswo4942.github.io, localhost/LAN
+- 로컬: `학습노트_열기.bat` → `server.py`(포트 8766) — 개발·확인용
+
+## 저장 · 동기화 (js/store.js)
+- 키별 `{t, v}` 최신값 우선. localStorage 접두어 `hynixai:`
+- 웹: 사이드바 '🔗 동기화 설정'에서 동기화 코드 입력 → `space = sha256("hynixai:" + 코드)`만 서버로 전송. 3초 폴링 수신, 0.7초 뒤 송신, 오프라인이면 재시도
+- `LOCAL_ONLY`(sideOpen·inkopts 등)는 기기별로 두고 동기화 안 함
+- 한계: 같은 페이지 필기(ink:단원id)는 페이지 단위 LWW → 두 기기 동시 필기 시 나중 저장이 이김
+
+## 콘텐츠
+- `content/textbook.md` `questions.json` `sources.json` = 바탕화면 `SK_hynix_AI_해커톤_2026_완전초보_상세학습패키지_v2.zip`의 01·02·04 **원본 그대로 (수정 금지)**. 앱이 런타임에 파싱:
+  - `# U00.`~`# U12.` → 단원(섹션 = `###`), `# 공부를 시작하기 전에` → START(섹션 = `##`), `# 초보자 핵심 사전` → #dict, 나머지 끝부분 → REVIEW
+  - 마크다운은 vendor/marked 12.0.2 + DOMPurify 3.1.6로 렌더(임의 HTML 차단). `\[...\]` 수식은 텍스트로 변환(원본은 title). 한글 조사 앞 `**굵게**`는 boldFix로 처리
+  - `[공식공지]` 등 태그 → 라벨, `[S03]` → 출처 링크
+- `js/content.js` = SITE 설정 + 보강 단원 EXTRA(P1~P4) + 보강 출처 R01~R10(교재 S번호와 충돌 방지용 R번호)
+- 문제: choices·answerIndex·explanation 원본 그대로, 문제 순서만 섞음. 정답률 = 정답/채점된 응답(미응답 제외)
+- 원본 규칙: 교재에 새 사실 임의 추가 금지, '기출·출제 확정·합격률·배점' 표현 금지, 보강은 원문 확인 후 R번호 등록
 
 ## 구조
-- `js/content.js` — **과목별로 바뀌는 유일한 파일**: `SITE`(제목·아이콘·단위·저장키), `SOURCES`(출처 ID→제목·URL), `LECTURES`(단원·섹션)
-  - 섹션 `src: ["S01"]` → 섹션 하단 '📎 근거 자료' 자동 표시, `p: [1,2]` → `img/slides/<단원id>/pNN.jpg` 슬라이드
-  - 라벨: 공식확인(OFF)·보도확인(NEWS)·기술근거(TECH)·학습구성(PLAN)·가상사례(CASE)·보강(ADD)
-- `js/app.js` 라우팅·홈·단원 페이지 / `js/draw.js` 필기 엔진(해부학노트와 동일) / `js/store.js` 저장·동기화
-- `tools_pdf_to_slides.py <pdf> <단원id>` — PDF → 1400px 슬라이드 jpg (`--summary`로 핵심정리 이미지)
-- `build_pages.py <입장코드> <빈폴더>` — GitHub Pages용 AES 암호화 빌드 (제목·아이콘·키는 content.js에서 읽음)
-
-## 콘텐츠 원칙 (원본 `바탕화면/01_검증된_학습교재.md` 규칙)
-- 원본에 없는 내용 추가 시: 원문 직접 확인 → `SOURCES`에 ID 등록 → 문장에 `보강` 라벨 + 섹션 `src`
-- '공식확인'은 대회 사이트(S01) 사실만. 언론 보도는 '보도확인'
-- '기출·출제 확정·합격률·배점·문제 수' 표현 금지, '시험 포인트' 대신 '핵심 포인트'
-- 연습문제 정답 원본은 `02_연습문제_데이터.json`만 허용 (2026-10-12 현재 없음 → 문제 은행 미구현)
-
-## 현재 내용 (2026-10-12)
-INFO(대회 정보) · U01~U12(원본) · U13 AI Native 협업(보강) · U14 SK하이닉스 기업 분석(보강) · REVIEW(카드 C01~C24·5일 계획) · SRC(출처 S01~S28·비교분석)
+- `js/app.js` 라우팅(#home #guide #start #u00~#u12 #review #quiz(.U04) #calc #dict #sources #info #u13 #u14 #extra-review), 사이드바 카테고리
+- `js/draw.js` 필기(펜·형광펜·가림펜·지우개, 스냅, 색 프리셋+자유 색상+굵기 슬라이더)
+- 단원 id(u00…, info, u13, u14, extra-review)와 섹션 id(s01…)는 필기·체크 저장 키 → 바꾸지 말 것

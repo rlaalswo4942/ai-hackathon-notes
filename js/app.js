@@ -26,7 +26,13 @@
     for (let i = 0; i < 5; i++) s = s.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, "($1) / ($2)").replace(/\\text\{([^{}]*)\}/g, "$1");
     return s.replace(/\\times/g, "×").replace(/\\cdot/g, "·").replace(/[{}]/g, "").replace(/\s+/g, " ");
   }
+  // CommonMark는 '**…)**은'처럼 닫는 ** 앞이 문장부호이고 뒤가 한글이면 굵게로 인식하지 않음 → 코드 밖의 **…**를 직접 <strong>으로
+  function boldFix(src) {
+    return src.split(/(```[\s\S]*?```)/g).map((part, i) => i % 2 ? part
+      : part.split(/(`[^`\n]*`)/g).map((p, j) => j % 2 ? p : p.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")).join("")).join("");
+  }
   function md(src) {
+    src = boldFix(src);
     const maths = [];
     src = src.replace(/\\\[([\s\S]*?)\\\]/g, (_, t) => { maths.push(t); return `\n\nMATHBLOCK${maths.length - 1}\n\n`; });
     let html = DOMPurify.sanitize(marked.parse(src, { gfm: true, breaks: false }));
