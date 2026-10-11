@@ -1,36 +1,159 @@
-/* 공부노트 - 앱 본체: 라우팅, 홈(2×n 카테고리), 사이드바, 단원 페이지, 체크리스트 */
+/* AI 해커톤 학습노트 - 앱 본체
+ * content/ 의 원본(교재 md·문제 json·출처 json)을 읽어 그대로 표시 + 보강 단원(js/content.js EXTRA)
+ * 라우트: #home #guide #start #u00~#u12 #review #quiz(.U04) #calc #dict #sources #info #u13 #u14 #extra-review  (섹션: #u04.s03)
+ */
 (function () {
-  const SITE = window.SITE, LECS = window.LECTURES;
-  const unit = L => L.tag || `${SITE.unitPrefix || ""}${L.no}${SITE.unit}`; // 예: "3강", "U03", 단원별 tag 우선
-  // 섹션 src: ["S01", ...] → 하단에 근거 자료 목록 (window.SOURCES 의 제목·URL)
-  function srcHtml(ids) {
-    if (!ids || !ids.length) return "";
-    const S = window.SOURCES || {};
-    return `<div class="src"><b>📎 근거 자료</b><ul>${ids.map(id => { const s = S[id]; return `<li><span class="sid">${id}</span>${s ? `${s.t} — <a href="${s.u}" target="_blank" rel="noopener">${s.u.replace(/^https?:\/\//, "")}</a>` : "(출처 목록에 없음)"}</li>`; }).join("")}</ul></div>`;
-  }
+  const SITE = window.SITE;
   const main = document.getElementById("main");
   const crumb = document.getElementById("crumb");
   let scale = 1, page = null, scaler = null, ro = null;
+  let UNITS = [], BOOK = [], QUESTIONS = [], QNOTICE = "", SRC = {}, DICT = [], PREFACE = "", MAP = {};
 
   document.title = SITE.title;
-  document.querySelector('link[rel="icon"]') || document.head.insertAdjacentHTML("beforeend", `<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>${SITE.icon}</text></svg>">`);
+  document.head.insertAdjacentHTML("beforeend", `<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>${SITE.icon}</text></svg>">`);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const tagOf = L => L.tag;
 
-  /* ── 진행도 ── */
+  /* ───────── 원본 불러오기 · 파싱 ───────── */
+  const COLORS = ["#64748b", "#5b5bd6", "#7c3aed", "#0891b2", "#dc2626", "#2563eb", "#db2777", "#ea580c", "#16a34a", "#9333ea", "#b91c1c", "#0d9488", "#4f46e5"];
+  const ICONS = ["🔌", "🤖", "🧩", "🗂️", "🎯", "🔤", "🌫️", "✍️", "📚", "🛠️", "🔒", "🧭", "🏭"];
+  const LABELS = { "공식공지": "off", "기술근거": "tech", "가상자료": "case", "가상사례": "case", "모든 상황은 가상": "case", "교육용 설명": "plan", "교육용 설계": "plan", "교육용 프레임": "plan", "교육용 템플릿": "plan", "근거 및 성격": "tech" };
+  const KIND = { official_event: "행사 공식 사이트", secondary_event_reporting: "언론 보도", primary_technical: "AI 기술 자료", open_standard: "AI 기술 자료", standards_risk: "AI 기술 자료", security_owasp: "AI 기술 자료" };
+
+  // 교재의 \[ ... \] 수식 → 읽을 수 있는 텍스트 (원본 수식은 title에 보존)
+  function plainMath(tex) {
+    let s = tex.trim();
+    for (let i = 0; i < 5; i++) s = s.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, "($1) / ($2)").replace(/\\text\{([^{}]*)\}/g, "$1");
+    return s.replace(/\\times/g, "×").replace(/\\cdot/g, "·").replace(/[{}]/g, "").replace(/\s+/g, " ");
+  }
+  function md(src) {
+    const maths = [];
+    src = src.replace(/\\\[([\s\S]*?)\\\]/g, (_, t) => { maths.push(t); return `\n\nMATHBLOCK${maths.length - 1}\n\n`; });
+    let html = DOMPurify.sanitize(marked.parse(src, { gfm: true, breaks: false }));
+    html = html.replace(/<p>MATHBLOCK(\d+)<\/p>/g, (_, i) => `<div class="formula" title="${esc(maths[i].trim())}">${esc(plainMath(maths[i]))}</div>`);
+    html = html.replace(/<table>/g, '<div class="tbl"><table>').replace(/<\/table>/g, "</table></div>");
+    html = html.replace(/\[(공식공지|기술근거|가상자료|가상사례|모든 상황은 가상|교육용 설명|교육용 설계|교육용 프레임|교육용 템플릿|근거 및 성격)\]/g, (_, l) => `<span class="lb ${LABELS[l]}">${l}</span>`);
+    html = html.replace(/\[(S\d\d)\]/g, (m, id) => SRC[id] ? `<a class="sref" href="${esc(SRC[id].u)}" target="_blank" rel="noopener" title="${esc(SRC[id].t)}">${id}</a>` : m);
+    return html;
+  }
+  const citedIn = text => [...new Set((text.match(/\[(S\d\d)\]/g) || []).map(s => s.slice(1, -1)))];
+  const stripMd = s => s.replace(/\*\*|`|\*/g, "").replace(/^\s*(?:[-*]|\d+\.)\s+/, "").trim();
+
+  function splitSections(body) {
+    const lines = body.split(/\r?\n/);
+    const lvl = lines.some(l => /^### /.test(l)) ? "### " : "## ";
+    const secs = []; let cur = { t: "", lines: [] };
+    lines.forEach(l => {
+      if (l.startsWith(lvl)) { secs.push(cur); cur = { t: l.slice(lvl.length).trim(), lines: [] }; }
+      else cur.lines.push(l);
+    });
+    secs.push(cur);
+    return secs.map(s => ({ t: s.t, raw: s.lines.join("\n").replace(/\n-{3,}\s*$/g, "").replace(/^\s*-{3,}\s*$/gm, "").trim() }))
+      .filter(s => s.raw || s.t);
+  }
+  function parseBook(text) {
+    const lines = text.split(/\r?\n/);
+    const blocks = []; let cur = null; const pre = [];
+    lines.forEach(l => {
+      if (/^# /.test(l)) { cur = { title: l.slice(2).trim(), lines: [] }; blocks.push(cur); }
+      else if (cur) cur.lines.push(l); else pre.push(l);
+    });
+    PREFACE = pre.join("\n");
+    const units = [], review = [];
+    blocks.forEach(b => {
+      const body = b.lines.join("\n");
+      const m = b.title.match(/^(U\d\d)\.\s*(.*)$/);
+      if (/^교재 소개|^AI 기초 지식/.test(b.title)) return;
+      if (/^초보자 핵심 사전/.test(b.title)) { DICT = parseTable(body); return; }
+      if (/^공부를 시작하기 전에/.test(b.title)) {
+        units.push(mkUnit("start", "START", b.title.replace(/^공부를 시작하기 전에:\s*/, "공부를 시작하기 전에: "), "읽는 법 · 공식 일정 · 전체 지도 · 5일 루트", "#0f172a", "🚩", body));
+        const mapRows = parseTable(body.split(/## 전체 지도/)[1] || "");
+        mapRows.forEach(r => { const id = (r["단원"] || "").match(/U\d\d/); if (id) MAP[id[0]] = r; });
+        return;
+      }
+      if (m) {
+        const n = +m[1].slice(1), r = MAP[m[1]] || {};
+        units.push(mkUnit(m[1].toLowerCase(), m[1], m[2], r["첫 목표"] || "", COLORS[n], ICONS[n], body, r["난이도"]));
+        return;
+      }
+      review.push({ t: b.title, raw: body.replace(/^\s*-{3,}\s*$/gm, "").trim() });
+    });
+    const rv = { id: "review", tag: "REVIEW", title: "한눈에 복습: 15쌍 비교 · 공식 · 25개 질문", en: "교재 끝부분", color: "#334155", icon: "🔁", desc: "헷갈리는 개념 비교, 계산 공식 한 장 정리, 스스로 확인할 질문, 출처와 검증 범위", book: true, goals: [] };
+    rv.sections = review.map((s, i) => ({ id: "s" + String(i + 1).padStart(2, "0"), t: s.t, html: md(s.raw), src: citedIn(s.raw) }));
+    return { units, review: rv };
+  }
+  function mkUnit(id, tag, title, desc, color, icon, body, level) {
+    const secs = splitSections(body);
+    let goals = [];
+    const g = secs.find(s => /오늘의 목표/.test(s.t));
+    if (g) goals = g.raw.split(/\r?\n/).filter(l => /^\s*(?:[-*]|\d+\.)\s+/.test(l)).map(stripMd);
+    return {
+      id, tag, title, en: level ? "난이도 · " + level : "", desc, color, icon, book: true, goals,
+      sections: secs.map((s, i) => ({ id: "s" + String(i + 1).padStart(2, "0"), t: s.t || "들어가며", html: md(s.raw), src: citedIn(s.raw) }))
+    };
+  }
+  function parseTable(text) {
+    const rows = text.split(/\r?\n/).filter(l => /^\s*\|/.test(l));
+    if (rows.length < 3) return [];
+    const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+    const head = cells(rows[0]);
+    return rows.slice(2).map(r => { const c = cells(r), o = {}; head.forEach((h, i) => (o[h] = c[i] || "")); return o; });
+  }
+
+  async function boot() {
+    main.innerHTML = `<div class="home"><p class="sub">교재를 불러오는 중…</p></div>`;
+    try {
+      const [t, q, s] = await Promise.all(["content/textbook.md", "content/questions.json", "content/sources.json"].map(u => fetch(u, { cache: "no-cache" }).then(r => { if (!r.ok) throw new Error(u + " " + r.status); return u.endsWith(".md") ? r.text() : r.json(); })));
+      s.sources.forEach(x => (SRC[x.id] = { t: `${x.organization} — ${x.title}`, u: x.url, kind: KIND[x.kind] || "AI 기술 자료", scope: x.scope }));
+      Object.entries(window.RESEARCH_SOURCES || {}).forEach(([id, x]) => (SRC[id] = x));
+      QUESTIONS = q.questions; QNOTICE = q.notice;
+      const b = parseBook(t);
+      BOOK = b.units.filter(u => u.id !== "start");
+      UNITS = [...b.units, b.review, ...(window.EXTRA || [])];
+    } catch (e) {
+      main.innerHTML = `<div class="home"><h1>교재를 불러오지 못했어요</h1><p class="sub">${esc(e.message)} — 인터넷 연결을 확인하고 새로고침하세요. (파일을 직접 더블클릭해 열면 동작하지 않습니다)</p></div>`;
+      return;
+    }
+    route();
+  }
+
+  /* ───────── 진행도 ───────── */
   const checks = () => Store.get("checks", {});
   const goalsSt = () => Store.get("goals", {});
+  const quizSt = () => Store.get("quiz", {});
   function isDone(lid, sid) { const c = checks(); return !!(c[lid] && c[lid][sid]); }
   function setDone(lid, sid, v) { const c = checks(); (c[lid] = c[lid] || {})[sid] = v; if (!v) delete c[lid][sid]; Store.set("checks", c); }
   function progress(L) { const c = checks()[L.id] || {}; const n = L.sections.filter(s => c[s.id]).length, total = L.sections.length; return { n, total, pct: total ? Math.round(n / total * 100) : 0 }; }
-  function overall() { let n = 0, t = 0; LECS.forEach(L => { const p = progress(L); n += p.n; t += p.total; }); return { n, t, pct: t ? Math.round(n / t * 100) : 0 }; }
+  function overall(list) { let n = 0, t = 0; list.forEach(L => { const p = progress(L); n += p.n; t += p.total; }); return { n, t, pct: t ? Math.round(n / t * 100) : 0 }; }
+  function quizStats(topic) {
+    const st = quizSt(); let graded = 0, ok = 0, total = 0;
+    QUESTIONS.forEach(q => { if (topic && q.topic !== topic) return; total++; const r = st[q.id]; if (r) { graded++; if (r.ok) ok++; } });
+    return { total, graded, ok, pct: graded ? Math.round(ok / graded * 1000) / 10 : null };
+  }
 
-  /* ── 사이드바 ── */
+  /* ───────── 사이드바 (카테고리) ───────── */
+  const GROUPS = () => [
+    { h: "시작", items: [{ id: "", ico: "🏠", t: "홈 · 전체 목차" }, { id: "guide", ico: "📖", t: "사용법 · 동기화 안내" }, uItem("start")] },
+    { h: "교재 U00 ~ U12", items: BOOK.map(L => uItem(L.id)) },
+    { h: "연습 · 도구", items: [{ id: "quiz", ico: "✅", t: "연습문제 80", sub: () => { const s = quizStats(); return `응답 ${s.graded}/${s.total}${s.pct != null ? " · 정답률 " + s.pct + "%" : ""}`; } }, { id: "calc", ico: "🧮", t: "혼동행렬 계산기" }, { id: "dict", ico: "📒", t: "초보자 핵심 사전" }, uItem("review")] },
+    { h: "보강 자료 (웹 조사)", items: (window.EXTRA || []).map(L => uItem(L.id)) },
+    { h: "근거", items: [{ id: "sources", ico: "🔎", t: "출처 모음 S01~S24 · R01~R10" }] }
+  ];
+  function uItem(id) { const L = UNITS.find(u => u.id === id); return L ? { id, ico: L.icon, t: L.title, L } : null; }
   function renderSide() {
     const nav = document.getElementById("side-nav");
     const route = (parseHash()[0] || "").replace(/^home$/, "");
-    let h = `<button class="side-item ${route === "" ? "active" : ""}" data-go="#home"><span class="ico" style="background:#eef">🏠</span><span class="txt"><span>홈 · 전체 목차</span><small>전체 진도 ${overall().pct}%</small></span></button>`;
-    LECS.forEach(L => {
-      const p = progress(L);
-      h += `<button class="side-item ${route === L.id ? "active" : ""}" data-go="#${L.id}"><span class="ico" style="background:${L.color}22">${L.icon}</span><span class="txt"><small>${unit(L)} · ${p.n}/${p.total}</small><span>${L.title}</span><div class="mini-bar"><i style="width:${p.pct}%;background:${L.color}"></i></div></span></button>`;
+    let h = "";
+    GROUPS().forEach(g => {
+      h += `<div class="side-group">${g.h}</div>`;
+      g.items.filter(Boolean).forEach(it => {
+        const L = it.L;
+        let sub = "";
+        if (L) { const p = progress(L); sub = `<small>${tagOf(L)} · 읽음 ${p.n}/${p.total}</small>`; }
+        else if (it.sub) sub = `<small>${it.sub()}</small>`;
+        const color = L ? L.color : "#5b5bd6";
+        h += `<button class="side-item ${route === it.id ? "active" : ""}" data-go="#${it.id || "home"}"><span class="ico" style="background:${color}22">${it.ico}</span><span class="txt">${sub}<span>${esc(it.t)}</span>${L ? `<div class="mini-bar"><i style="width:${progress(L).pct}%;background:${color}"></i></div>` : ""}</span></button>`;
+      });
     });
     nav.innerHTML = h;
   }
@@ -43,65 +166,72 @@
   document.getElementById("side-toggle").addEventListener("click", () => setSide(document.body.classList.contains("side-closed")));
   document.getElementById("side-close").addEventListener("click", () => setSide(false));
 
-  /* ── 홈: 2×n 카테고리 그리드 ── */
+  /* ───────── 홈 ───────── */
   function renderHome() {
-    const o = overall();
-    let h = `<div class="home"><h1>${SITE.icon} ${SITE.title}</h1><p class="sub">${SITE.sub}</p>
-      <div class="cat-grid">`;
-    LECS.forEach(L => {
-      const p = progress(L), img = L.thumb || L.summary;
-      const thumb = img ? `<span class="thumb" style="background-image:url('${img}')">` : `<span class="thumb noimg" style="background:linear-gradient(135deg, ${L.color}33, ${L.color}11)">${L.icon}`;
-      h += `<button class="cat" data-go="#${L.id}">
-        ${thumb}<span class="no" style="background:${L.color}">${unit(L)}</span></span>
-        <span class="body"><b>${L.icon} ${L.title}</b><small>${L.en || ""}</small><p>${L.desc || ""}</p>
-        <span class="prog"><span class="mini-bar"><i style="width:${p.pct}%;background:${L.color}"></i></span>${p.n}/${p.total} 완료</span></span></button>`;
-    });
-    h += `</div>
-      <div class="overall" style="margin-top:16px"><b>전체 진도</b><span class="bar"><i style="width:${o.pct}%"></i></span><b>${o.pct}%</b><small>${o.n}/${o.t} 섹션</small></div>
-      <div class="howto"><h3>✍️ 사용법</h3>
-      <b>필기 툴바</b>(${SITE.unit === "강" ? "강의" : "단원"} 페이지 오른쪽): ✏️ 펜 · 🖍️ 형광펜 · 🙈 가림펜 · 🧽 지우개 · ↶ 실행취소<br>
-      • <b>가림펜</b>: 외울 부분을 칠하면 가려지고, <b>탭(클릭)하면 투명</b>해져 답이 보입니다. 다시 탭하면 다시 가려져요. 👁️로 페이지 전체 보기/가리기.<br>
-      • <b>🧲 스냅</b>(기본 켬): 형광펜·가림펜으로 대충 칠해도 <b>글자/단어 크기에 딱 맞게</b> 정리되고, 그림 위에서는 그림 속 글자·선 영역에 맞춰 사각형으로 맞춰집니다.<br>
-      • <b>🖊️ 펜전용</b>: 아이패드/갤럭시탭에서 켜면 손가락은 스크롤, 펜(애플펜슬·S펜)으로만 필기됩니다.<br>
-      • 단축키: <kbd>V</kbd> 읽기 <kbd>P</kbd> 펜 <kbd>H</kbd> 형광펜 <kbd>M</kbd> 가림펜 <kbd>E</kbd> 지우개 <kbd>Ctrl+Z</kbd> 취소<br>
-      <b>체크리스트</b>: 세부 섹션마다 "공부 완료"를 눌러 진도를 기록하세요. 홈과 사이드바에 진도율이 표시됩니다.<br>
-      <b>저장</b>: 필기와 체크는 이 기기(브라우저)에 자동 저장돼요. 노트북과 태블릿을 오갈 땐 왼쪽 목차 아래 <b>💾 백업 저장</b>으로 파일을 만들고, 다른 기기에서 <b>📂 백업 불러오기</b>로 여세요.</div></div>`;
+    const o = overall(BOOK), qs = quizStats(), last = Store.get("last", null), lastL = last && UNITS.find(u => u.id === last);
+    let h = `<div class="home"><h1>${SITE.icon} ${esc(SITE.title)}</h1><p class="sub">${esc(SITE.sub)}</p>
+      <div class="notice"><b>⚠️ 비공식 개인 학습자료</b> — SK하이닉스·운영사의 공식 교재나 기출문제가 아니며 특정 주제의 출제를 보장하지 않습니다.
+      <span class="lb off">공식공지</span> 1차 예선 <b>2026-10-17(토)~18(일) 중 하루, 온라인, 'AI 기초 지식 및 활용 역량 검증'</b>. 문제 수·시간·도구 허용 여부는 개별 응시 안내로 확인하세요.
+      <a href="${esc(SRC.S01 ? SRC.S01.u : "#")}" target="_blank" rel="noopener">공식 페이지 ↗</a></div>
+      <div class="start-row"><button class="big" data-go="#start">🚩 완전 처음 시작</button>${lastL ? `<button class="big alt" data-go="#${lastL.id}">▶ 이어하기 · ${esc(tagOf(lastL))} ${esc(lastL.title)}</button>` : ""}<button class="big alt" data-go="#quiz">✅ 연습문제</button></div>
+      <div class="overall"><b>교재 읽기</b><span class="bar"><i style="width:${o.pct}%"></i></span><b>${o.pct}%</b><small>${o.n}/${o.t} 섹션</small>
+        <b style="margin-left:10px">문제 정답률</b><b>${qs.pct != null ? qs.pct + "%" : "—"}</b><small>채점 ${qs.graded}/${qs.total} (미응답 제외)</small></div>
+      <h2 class="grp">📘 교재 U00 ~ U12</h2><div class="cat-grid">`;
+    BOOK.forEach(L => (h += card(L)));
+    h += `</div><h2 class="grp">🧰 연습 · 복습</h2><div class="cat-grid">`;
+    h += tool("quiz", "✅", "연습문제 80문항", "입문·기본·응용·계산 · 단원별 · 오답 다시 풀기", "#16a34a");
+    h += tool("calc", "🧮", "혼동행렬 계산기", "TP·TN·FP·FN을 넣어 정확도·정밀도·재현율·F1 계산", "#dc2626");
+    h += tool("dict", "📒", "초보자 핵심 사전", `교재의 용어 ${DICT.length}개 검색`, "#0891b2");
+    h += card(UNITS.find(u => u.id === "review"));
+    h += `</div><h2 class="grp">🔬 보강 자료 <small>교재 밖 웹 조사 · 출처 R01~R10</small></h2><div class="cat-grid">`;
+    (window.EXTRA || []).forEach(L => (h += card(L)));
+    h += `</div></div>`;
     main.innerHTML = h;
     main.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => (location.hash = b.dataset.go)));
   }
+  function card(L) {
+    const p = progress(L), qs = /^U\d\d$/.test(L.tag) ? quizStats(L.tag) : null;
+    return `<button class="cat" data-go="#${L.id}">
+      <span class="thumb noimg" style="background:linear-gradient(135deg, ${L.color}33, ${L.color}11)">${L.icon}<span class="no" style="background:${L.color}">${esc(L.tag)}</span></span>
+      <span class="body"><b>${esc(L.title)}</b><small>${esc(L.en || "")}</small><p>${esc(L.desc || "")}</p>
+      <span class="prog"><span class="mini-bar"><i style="width:${p.pct}%;background:${L.color}"></i></span>읽음 ${p.n}/${p.total}${qs ? ` · 정답률 ${qs.pct != null ? qs.pct + "%" : "—"}` : ""}</span></span></button>`;
+  }
+  function tool(id, ico, t, d, color) {
+    return `<button class="cat" data-go="#${id}"><span class="thumb noimg" style="background:linear-gradient(135deg, ${color}33, ${color}11)">${ico}</span><span class="body"><b>${t}</b><p>${d}</p></span></button>`;
+  }
 
-  /* ── 단원 페이지 ── */
+  /* ───────── 단원 페이지 (필기 가능, 1000px 고정폭) ───────── */
+  function srcHtml(ids) {
+    if (!ids || !ids.length) return "";
+    return `<div class="src"><b>📎 근거 자료</b><ul>${ids.map(id => { const s = SRC[id]; return `<li><span class="sid">${id}</span>${s ? `<span class="kind">${esc(s.kind)}</span>${esc(s.t)} — <a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.u.replace(/^https?:\/\//, ""))}</a>` : "(출처 목록에 없음)"}</li>`; }).join("")}</ul></div>`;
+  }
   function renderLecture(L, anchor) {
-    const p = progress(L);
-    const C = 2 * Math.PI * 34;
-    const goals = L.goals || [];
+    Store.set("last", L.id);
+    const p = progress(L), C = 2 * Math.PI * 34, goals = L.goals || [];
+    const qn = /^U\d\d$/.test(L.tag) ? QUESTIONS.filter(q => q.topic === L.tag).length : 0;
     let h = `<div class="hero" style="background:linear-gradient(135deg, ${L.color}, ${L.color}cc)">
-      <div class="k">${L.tag || `${SITE.unitEn} ${L.no}`}</div><h1>${L.icon} ${L.title}</h1><div class="en">${[L.en, SITE.by].filter(Boolean).join(" · ")}</div>
-      <div class="hero-row"><button data-jump="checklist">✅ 체크리스트</button>${L.summary ? `<button data-jump="summary">🖼️ 핵심정리 시트</button>` : ""}${goals.length ? `<button data-jump="goals">🎯 학습목표 점검</button>` : ""}</div>
+      <div class="k">${esc(L.tag)}${L.book ? " · 교재 원문" : " · 보강 자료"}</div><h1>${L.icon} ${esc(L.title)}</h1><div class="en">${esc(L.en || "")}</div>
+      <div class="hero-row"><button data-jump="checklist">✅ 체크리스트</button>${goals.length ? `<button data-jump="goals">🎯 목표 점검</button>` : ""}${qn ? `<button data-go="#quiz.${L.tag}">✍️ 확인 문제 ${qn}개</button>` : ""}</div>
       <svg class="ring" viewBox="0 0 84 84"><circle cx="42" cy="42" r="34" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="8"/><circle class="ring-fg" cx="42" cy="42" r="34" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - p.pct / 100)}" transform="rotate(-90 42 42)"/></svg>
       <div class="ring"><b class="ring-txt">${p.pct}%</b></div></div>`;
-    // 체크리스트
-    h += `<div class="card" id="checklist"><h2>✅ 공부 체크리스트 <small style="font-size:13px;color:var(--sub);font-weight:500">(${L.sections.length}개 세부 섹션 · 체크하면 진도에 반영)</small></h2><div class="checklist">`;
-    L.sections.forEach((s, i) => (h += `<div class="ck ${isDone(L.id, s.id) ? "done" : ""}" data-sec="${s.id}"><span class="num">${i + 1}</span><span class="box"></span><span class="lbl">${s.t}</span><span class="go" data-goto="${s.id}">이동 ›</span></div>`));
+    h += `<div class="card" id="checklist"><h2>✅ 읽음 체크리스트 <small style="font-size:13px;color:var(--sub);font-weight:500">(${L.sections.length}개 섹션 · 다 읽으면 체크)</small></h2><div class="checklist">`;
+    L.sections.forEach((s, i) => (h += `<div class="ck ${isDone(L.id, s.id) ? "done" : ""}" data-sec="${s.id}"><span class="num">${i + 1}</span><span class="box"></span><span class="lbl">${esc(s.t)}</span><span class="go" data-goto="${s.id}">이동 ›</span></div>`));
     h += `</div></div>`;
-    // 섹션 (p: 슬라이드 페이지 번호 → img/slides/<단원id>/pNN.jpg, 없으면 본문만 넓게)
     L.sections.forEach((s, i) => {
-      const slides = (s.p || []).map(n => `<div class="slide"><img src="img/slides/${L.id}/p${String(n).padStart(2, "0")}.jpg" width="1400" height="788" loading="lazy" decoding="async" alt="${unit(L)} 슬라이드 ${n}"><span class="pg">p.${n}</span></div>`).join("");
-      const wide = s.wide || !slides;
+      const body = s.html != null ? s.html : `${s.h || ""}${s.tip ? `<div class="tip">${s.tip}</div>` : ""}`;
       h += `<section class="sec ${isDone(L.id, s.id) ? "done" : ""}" id="s-${s.id}" data-sec="${s.id}">
-        <div class="sec-head"><span class="n">${i + 1}</span><h3>${s.t}</h3><button class="done-btn">${isDone(L.id, s.id) ? "✓ 완료" : "공부 완료"}</button></div>
-        <div class="sec-body ${wide ? "wide" : ""}"><div class="notes">${s.h || ""}${s.tip ? `<div class="tip">${s.tip}</div>` : ""}${srcHtml(s.src)}</div>${slides ? `<div class="slides">${slides}</div>` : ""}</div></section>`;
+        <div class="sec-head"><span class="n">${i + 1}</span><h3>${esc(s.t)}</h3><button class="done-btn">${isDone(L.id, s.id) ? "✓ 완료" : "읽음"}</button></div>
+        <div class="sec-body wide"><div class="notes${s.html != null ? " md" : ""}">${body}${srcHtml(s.src)}</div></div></section>`;
     });
-    // 요약 시트, 학습목표 (있을 때만)
-    if (L.summary) h += `<div class="card" id="summary"><h2>🖼️ ${unit(L)} 핵심정리 시트</h2><img class="summary-img" src="${L.summary}" loading="lazy" alt="${unit(L)} 핵심정리"></div>`;
     if (goals.length) {
       const gs = goalsSt()[L.id] || {};
-      h += `<div class="card" id="goals"><h2>🎯 학습목표 자가점검 <small style="font-size:13px;color:var(--sub);font-weight:500">설명할 수 있으면 체크</small></h2><div class="checklist" style="grid-template-columns:1fr">`;
-      goals.forEach((g, i) => (h += `<div class="ck goal ${gs[i] ? "done" : ""}" data-goal="${i}"><span class="num">${i + 1}</span><span class="box"></span><span class="lbl">${g}</span></div>`));
+      h += `<div class="card" id="goals"><h2>🎯 목표 자가점검 <small style="font-size:13px;color:var(--sub);font-weight:500">설명할 수 있으면 체크</small></h2><div class="checklist" style="grid-template-columns:1fr">`;
+      goals.forEach((g, i) => (h += `<div class="ck goal ${gs[i] ? "done" : ""}" data-goal="${i}"><span class="num">${i + 1}</span><span class="box"></span><span class="lbl">${esc(g)}</span></div>`));
       h += `</div></div>`;
     }
-    const idx = LECS.indexOf(L), prev = LECS[idx - 1], next = LECS[idx + 1];
-    h += `<div class="pn">${prev ? `<button data-go="#${prev.id}"><small>‹ 이전</small>${unit(prev)} ${prev.title}</button>` : "<span></span>"}${next ? `<button data-go="#${next.id}"><small>다음 ›</small>${unit(next)} ${next.title}</button>` : `<button data-go="#home"><small>마지막 ${SITE.unit === "강" ? "강의" : "단원"}</small>🏠 홈으로</button>`}</div>`;
+    if (qn) { const qs = quizStats(L.tag); h += `<div class="card"><h2>✍️ 이 단원 확인 문제</h2><p>${qn}문항 · 채점 ${qs.graded}개 · 정답률 ${qs.pct != null ? qs.pct + "%" : "—"} <small>(자체 제작 연습문제, 기출 아님)</small></p><button class="pill" data-go="#quiz.${L.tag}">문제 풀기 ›</button></div>`; }
+    const seq = UNITS, idx = seq.indexOf(L), prev = seq[idx - 1], next = seq[idx + 1];
+    h += `<div class="pn">${prev ? `<button data-go="#${prev.id}"><small>‹ 이전</small>${esc(prev.tag)} ${esc(prev.title)}</button>` : "<span></span>"}${next ? `<button data-go="#${next.id}"><small>다음 ›</small>${esc(next.tag)} ${esc(next.title)}</button>` : `<button data-go="#home"><small>마지막</small>🏠 홈으로</button>`}</div>`;
 
     main.innerHTML = `<div class="scaler"><div class="page" id="page">${h}</div></div>`;
     scaler = main.querySelector(".scaler"); page = main.querySelector(".page");
@@ -109,24 +239,25 @@
     ro = new ResizeObserver(() => fit()); ro.observe(page);
     fit();
     Ink.attach(page, L.id, () => scale, main);
-    if (anchor) requestAnimationFrame(() => jumpTo(anchor === "checklist" || anchor === "summary" || anchor === "goals" ? anchor : "s-" + anchor));
+    if (anchor) requestAnimationFrame(() => jumpTo(anchor === "checklist" || anchor === "goals" ? anchor : "s-" + anchor));
   }
   function onPageClick(L, e) {
     const t = e.target;
+    if (t.closest("a[href^='http']")) return;
     const jump = t.closest("[data-jump]"); if (jump) return jumpTo(jump.dataset.jump);
     const go = t.closest("[data-goto]"); if (go) { e.stopPropagation(); return jumpTo("s-" + go.dataset.goto); }
     const nav = t.closest("[data-go]"); if (nav) return (location.hash = nav.dataset.go);
     const ck = t.closest(".ck[data-sec]"); if (ck) return toggleSec(L, ck.dataset.sec);
     const db = t.closest(".done-btn"); if (db) return toggleSec(L, db.closest(".sec").dataset.sec);
     const gl = t.closest(".ck.goal"); if (gl) { const g = goalsSt(); const o = (g[L.id] = g[L.id] || {}); o[gl.dataset.goal] = !o[gl.dataset.goal]; Store.set("goals", g); gl.classList.toggle("done", !!o[gl.dataset.goal]); return; }
-    const img = t.closest(".slide img, .summary-img, .notes img"); if (img) openLightbox(img.src);
+    const img = t.closest(".notes img"); if (img) openLightbox(img.src);
   }
   function toggleSec(L, sid) {
     const v = !isDone(L.id, sid); setDone(L.id, sid, v);
     page.querySelectorAll(`[data-sec="${sid}"]`).forEach(el => el.classList.toggle("done", v));
-    const btn = page.querySelector(`#s-${sid} .done-btn`); if (btn) btn.textContent = v ? "✓ 완료" : "공부 완료";
+    const btn = page.querySelector(`#s-${sid} .done-btn`); if (btn) btn.textContent = v ? "✓ 완료" : "읽음";
     updateRing(L); renderSide();
-    if (v) { const p = progress(L); toast(p.n === p.total ? `🎉 ${unit(L)} 모든 섹션 완료!` : `✓ 완료 (${p.n}/${p.total})`); }
+    if (v) { const p = progress(L); toast(p.n === p.total ? `🎉 ${L.tag} 모든 섹션 읽음!` : `✓ 읽음 (${p.n}/${p.total})`); }
   }
   function updateRing(L) {
     const p = progress(L), C = 2 * Math.PI * 34;
@@ -140,7 +271,7 @@
   }
   function fit() {
     if (!page || !page.isConnected) return;
-    const avail = main.clientWidth - (window.innerWidth >= 1000 ? 84 : 12); // 넓은 화면: 오른쪽 세로 툴바 공간 / 좁은 화면: 하단 툴바
+    const avail = main.clientWidth - (window.innerWidth >= 1000 ? 84 : 12);
     scale = Math.max(0.3, Math.min(1.25, avail / 1000));
     page.style.transform = `scale(${scale})`;
     scaler.style.width = 1000 * scale + "px";
@@ -149,56 +280,250 @@
   }
   window.addEventListener("resize", fit);
 
-  /* ── 라이트박스 / 토스트 ── */
+  /* ───────── 연습문제 ───────── */
+  let QS = null; // 현재 풀이 세션 { mode, topic, list:[id], i, answered:{id:{a,ok}} }
+  const LEVEL_MODES = { basic: ["입문", "기본"], applied: ["응용", "계산"] };
+  function quizList(mode, topic) {
+    const st = quizSt();
+    let list = QUESTIONS;
+    if (mode === "basic") list = list.filter(q => LEVEL_MODES.basic.includes(q.level));
+    else if (mode === "applied") list = list.filter(q => LEVEL_MODES.applied.includes(q.level));
+    else if (mode === "unit") list = list.filter(q => q.topic === topic);
+    else if (mode === "wrong") list = list.filter(q => st[q.id] && !st[q.id].ok);
+    const ids = list.map(q => q.id);
+    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } // 문제 순서만 섞음 (보기 순서는 원본 유지)
+    return ids;
+  }
+  function renderQuiz(topic) {
+    if (topic && !QS) QS = { mode: "unit", topic, list: quizList("unit", topic), i: 0, answered: {} };
+    if (topic && QS && (QS.mode !== "unit" || QS.topic !== topic)) QS = { mode: "unit", topic, list: quizList("unit", topic), i: 0, answered: {} };
+    const s = quizStats(), st = quizSt(), wrongN = QUESTIONS.filter(q => st[q.id] && !st[q.id].ok).length;
+    let h = `<div class="home quiz"><h1>✅ 연습문제</h1>
+      <div class="notice"><b>⚠️ ${esc(QNOTICE)}</b> 정답률은 <b>정답 수 ÷ 채점된 응답 수 × 100</b>(미응답 제외)이며 실제 예선 점수와 무관합니다.</div>
+      <div class="overall"><b>전체</b><span class="bar"><i style="width:${s.total ? s.graded / s.total * 100 : 0}%"></i></span><small>채점 ${s.graded}/${s.total}</small><b>정답률 ${s.pct != null ? s.pct + "%" : "—"}</b>${wrongN ? `<small>오답 ${wrongN}개</small>` : ""}</div>
+      <div class="modes">
+        <button data-mode="basic">🌱 기본 모드 <small>입문·기본 ${QUESTIONS.filter(q => LEVEL_MODES.basic.includes(q.level)).length}</small></button>
+        <button data-mode="all">📚 전 범위 <small>${QUESTIONS.length}</small></button>
+        <button data-mode="applied">🧠 응용 문제 <small>응용·계산 ${QUESTIONS.filter(q => LEVEL_MODES.applied.includes(q.level)).length}</small></button>
+        <button data-mode="wrong" ${wrongN ? "" : "disabled"}>🔁 오답 다시 풀기 <small>${wrongN}</small></button>
+        <select data-unit><option value="">단원별 선택…</option>${BOOK.map(L => `<option value="${L.tag}" ${QS && QS.mode === "unit" && QS.topic === L.tag ? "selected" : ""}>${L.tag} ${esc(L.title)} (${QUESTIONS.filter(q => q.topic === L.tag).length})</option>`).join("")}</select>
+      </div><div id="qbox"></div>
+      <h2 class="grp">단원별 기록</h2><div class="tbl"><table class="qtable"><tr><th>단원</th><th>문항</th><th>채점</th><th>정답률</th><th></th></tr>${BOOK.map(L => { const u = quizStats(L.tag); return `<tr><td>${L.tag} ${esc(L.title)}</td><td>${u.total}</td><td>${u.graded}</td><td>${u.pct != null ? u.pct + "%" : "—"}</td><td><a href="#${L.id}">교재 ›</a></td></tr>`; }).join("")}</table></div>
+      <p><button class="pill ghost" data-reset>기록 초기화</button></p></div>`;
+    main.innerHTML = h;
+    main.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => { QS = { mode: b.dataset.mode, list: quizList(b.dataset.mode), i: 0, answered: {} }; if (location.hash !== "#quiz") location.hash = "#quiz"; else drawQ(); }));
+    main.querySelector("[data-unit]").addEventListener("change", e => { if (e.target.value) location.hash = "#quiz." + e.target.value; });
+    main.querySelector("[data-reset]").addEventListener("click", e => {
+      if (!e.target.dataset.armed) { e.target.dataset.armed = 1; e.target.textContent = "한 번 더 누르면 모든 문제 기록 삭제"; return; }
+      Store.set("quiz", {}); QS = null; renderQuiz(); renderSide(); toast("문제 기록을 초기화했어요");
+    });
+    drawQ();
+  }
+  function drawQ() {
+    const box = document.getElementById("qbox"); if (!box) return;
+    if (!QS) { box.innerHTML = `<div class="qcard empty">위에서 모드를 고르면 문제가 시작됩니다. 처음이면 <b>🌱 기본 모드</b>를 추천해요.</div>`; return; }
+    if (!QS.list.length) { box.innerHTML = `<div class="qcard empty">이 모드에 해당하는 문제가 없어요.</div>`; return; }
+    if (QS.i >= QS.list.length) {
+      const a = Object.values(QS.answered), ok = a.filter(x => x.ok).length;
+      box.innerHTML = `<div class="qcard"><h3>🏁 이번 풀이 끝</h3><p>${a.length}문항 중 <b>${ok}개 정답</b> (${a.length ? Math.round(ok / a.length * 1000) / 10 : 0}%) — 자체 연습 결과이며 합격 가능성과 무관합니다.</p>
+        <div class="qnav"><button class="pill" data-again>같은 모드 다시</button>${a.some(x => !x.ok) ? `<button class="pill alt" data-wrong>이번 오답만 다시</button>` : ""}</div></div>`;
+      box.querySelector("[data-again]").onclick = () => { QS = { ...QS, list: quizList(QS.mode, QS.topic), i: 0, answered: {} }; drawQ(); };
+      const w = box.querySelector("[data-wrong]"); if (w) w.onclick = () => { const ids = QS.list.filter(id => QS.answered[id] && !QS.answered[id].ok); QS = { ...QS, list: ids, i: 0, answered: {} }; drawQ(); };
+      return;
+    }
+    const q = QUESTIONS.find(x => x.id === QS.list[QS.i]), done = QS.answered[q.id], L = BOOK.find(u => u.tag === q.topic), prev = quizSt()[q.id];
+    let h = `<div class="qcard"><div class="qmeta"><span>${QS.i + 1} / ${QS.list.length}</span><span class="lv">${esc(q.level)}</span><span>${esc(q.topic)}${L ? " " + esc(L.title) : ""}</span><span class="qid">${q.id}${prev ? ` · 지난 기록 ${prev.ok ? "⭕" : "❌"} (${prev.n}회)` : ""}</span></div>
+      <h3>${esc(q.question)}</h3><div class="choices">`;
+    q.choices.forEach((c, i) => {
+      let cls = "";
+      if (done) cls = i === q.answerIndex ? "right" : i === done.a ? "wrong" : "dim";
+      h += `<button class="choice ${cls}" data-c="${i}" ${done ? "disabled" : ""}><b>${"①②③④"[i]}</b> ${esc(c)}</button>`;
+    });
+    h += `</div>`;
+    if (done) {
+      h += `<div class="result ${done.ok ? "ok" : "no"}">${done.ok ? "⭕ 정답" : `❌ 오답 — 정답은 ${"①②③④"[q.answerIndex]}`}</div>
+        <div class="expl"><b>해설</b> ${esc(q.explanation)}</div>${srcHtml(q.sourceIds)}
+        ${L ? `<p><a href="#${L.id}">📘 ${L.tag} 교재로 돌아가 복습 ›</a></p>` : ""}<p class="origin">${esc(q.origin || "")}</p>`;
+    }
+    h += `<div class="qnav"><button class="pill ghost" data-prev ${QS.i ? "" : "disabled"}>‹ 이전</button>${done ? `<button class="pill" data-next>${QS.i + 1 < QS.list.length ? "다음 문제 ›" : "결과 보기 ›"}</button>` : `<span class="hint">보기를 누르면 바로 채점됩니다</span>`}</div></div>`;
+    box.innerHTML = h;
+    box.querySelectorAll("[data-c]").forEach(b => b.addEventListener("click", () => answer(q, +b.dataset.c)));
+    const nx = box.querySelector("[data-next]"); if (nx) nx.onclick = () => { QS.i++; drawQ(); box.scrollIntoView({ block: "start", behavior: "smooth" }); };
+    const pv = box.querySelector("[data-prev]"); if (pv) pv.onclick = () => { QS.i = Math.max(0, QS.i - 1); drawQ(); };
+  }
+  function answer(q, a) {
+    const ok = a === q.answerIndex;
+    QS.answered[q.id] = { a, ok };
+    const st = quizSt(), r = st[q.id] || { n: 0 };
+    st[q.id] = { a, ok, n: r.n + 1, t: Date.now() };
+    Store.set("quiz", st);
+    drawQ(); renderSide();
+  }
+
+  /* ───────── 혼동행렬 계산기 ───────── */
+  function renderCalc() {
+    const v = Store.get("calc", { TP: 8, TN: 85, FP: 5, FN: 2 });
+    main.innerHTML = `<div class="home calc"><h1>🧮 혼동행렬 계산기</h1>
+      <p class="sub">먼저 <b>무엇을 양성(Positive)으로 볼지</b> 정하세요. 예: 불량 = 양성. 값은 0 이상의 정수, 결과는 소수점 둘째 자리 반올림.</p>
+      <div class="cm">
+        <div></div><div class="hd">예측: 양성</div><div class="hd">예측: 음성</div>
+        <div class="hd">실제: 양성</div>${inp("TP", "불량을 제대로 잡음", v)}${inp("FN", "불량을 놓침 (미탐)", v)}
+        <div class="hd">실제: 음성</div>${inp("FP", "정상인데 불량이라 함 (오탐)", v)}${inp("TN", "정상을 정상으로", v)}
+      </div>
+      <div class="presets"><span>교재 예제:</span><button data-p="8,85,5,2">TP8 TN85 FP5 FN2</button><button data-p="6,88,2,4">TP6 TN88 FP2 FN4</button><button data-p="0,10,0,0">분모 0 예: TN10</button></div>
+      <div id="calc-out"></div></div>`;
+    const read = () => { const o = {}; ["TP", "TN", "FP", "FN"].forEach(k => { const n = Math.max(0, Math.floor(+main.querySelector(`[data-k="${k}"]`).value || 0)); o[k] = n; }); return o; };
+    const draw = () => { const o = read(); Store.set("calc", o); document.getElementById("calc-out").innerHTML = calcOut(o); };
+    main.querySelectorAll("[data-k]").forEach(i => i.addEventListener("input", draw));
+    main.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => { const [a, b2, c, d] = b.dataset.p.split(",").map(Number); Object.entries({ TP: a, TN: b2, FP: c, FN: d }).forEach(([k, n]) => (main.querySelector(`[data-k="${k}"]`).value = n)); draw(); }));
+    draw();
+  }
+  const inp = (k, d, v) => `<label class="cell ${k}"><b>${k}</b><input type="number" min="0" step="1" inputmode="numeric" data-k="${k}" value="${v[k]}"><small>${d}</small></label>`;
+  function calcOut({ TP, TN, FP, FN }) {
+    const N = TP + TN + FP + FN;
+    const pct = (num, den) => den ? (Math.round(num / den * 10000) / 100).toFixed(2).replace(/\.00$/, "") + "%" : null;
+    const rows = [
+      ["정확도 Accuracy", "(TP + TN) / (TP + TN + FP + FN)", `(${TP} + ${TN}) / ${N}`, pct(TP + TN, N), "전체 건수가 0"],
+      ["정밀도 Precision", "TP / (TP + FP)", `${TP} / (${TP} + ${FP})`, pct(TP, TP + FP), "양성이라고 예측한 것이 0개 (TP+FP=0)"],
+      ["재현율 Recall", "TP / (TP + FN)", `${TP} / (${TP} + ${FN})`, pct(TP, TP + FN), "실제 양성이 0개 (TP+FN=0)"],
+      ["F1", "2TP / (2TP + FP + FN)", `${2 * TP} / (${2 * TP} + ${FP} + ${FN})`, pct(2 * TP, 2 * TP + FP + FN), "2TP+FP+FN=0 (정밀도·재현율 모두 정의 안 됨)"]
+    ];
+    return `<div class="tbl"><table class="calc-t"><tr><th>지표</th><th>공식</th><th>대입</th><th>결과</th></tr>${rows.map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td class="res">${r[3] != null ? r[3] : `<span class="na">N/A</span><small>${r[4]}</small>`}</td></tr>`).join("")}</table></div>
+      <p class="sub">실제 양성 = TP+FN = ${TP + FN} · 실제 음성 = TN+FP = ${TN + FP} · 모델의 양성 판정 = TP+FP = ${TP + FP} · 전체 = ${N}</p>`;
+  }
+
+  /* ───────── 사전 ───────── */
+  function renderDict() {
+    main.innerHTML = `<div class="home dict"><h1>📒 초보자 핵심 사전</h1><p class="sub">교재 원문의 용어 ${DICT.length}개. 처음 배울 단원을 누르면 이동합니다.</p>
+      <input class="search" type="search" placeholder="용어 검색 (예: 재현율, RAG, 토큰)" data-q><div class="tbl"><table class="dict-t"><thead><tr><th>용어</th><th>가장 쉬운 풀이</th><th>처음 배울 곳</th></tr></thead><tbody></tbody></table></div></div>`;
+    const tb = main.querySelector("tbody");
+    const draw = q => {
+      q = (q || "").trim().toLowerCase();
+      tb.innerHTML = DICT.filter(r => !q || Object.values(r).join(" ").toLowerCase().includes(q)).map(r => `<tr><td><b>${esc(r["용어"])}</b></td><td>${esc(r["가장 쉬운 풀이"])}</td><td>${esc(r["처음 배울 곳"]).replace(/U\d\d/g, m => `<a href="#${m.toLowerCase()}">${m}</a>`)}</td></tr>`).join("") || `<tr><td colspan="3">찾는 용어가 없어요</td></tr>`;
+    };
+    main.querySelector("[data-q]").addEventListener("input", e => draw(e.target.value));
+    draw("");
+  }
+
+  /* ───────── 출처 모음 ───────── */
+  function renderSources() {
+    const used = {};
+    UNITS.forEach(L => L.sections.forEach(s => (s.src || []).forEach(id => ((used[id] = used[id] || new Set()).add(L.tag)))));
+    QUESTIONS.forEach(q => (q.sourceIds || []).forEach(id => ((used[id] = used[id] || new Set()).add("문제"))));
+    const groups = ["행사 공식 사이트", "언론 보도", "AI 기술 자료", "기업 공식 자료"];
+    let h = `<div class="home srcs"><h1>🔎 출처 모음</h1><p class="sub">S01~S24 = 교재 원본 출처(04_출처_목록.json) · R01~R10 = 보강 웹 조사(2026-10-12 원문 확인). 출처가 있다는 것은 개념의 근거라는 뜻이지 출제된다는 뜻이 아닙니다.</p>`;
+    groups.forEach(g => {
+      const ids = Object.keys(SRC).filter(id => SRC[id].kind === g).sort();
+      if (!ids.length) return;
+      h += `<h2 class="grp">${g}</h2><div class="tbl"><table><tr><th>ID</th><th>문서</th><th>쓰인 곳</th></tr>${ids.map(id => `<tr><td><b>${id}</b></td><td>${esc(SRC[id].t)}<br><a href="${esc(SRC[id].u)}" target="_blank" rel="noopener">${esc(SRC[id].u)}</a>${SRC[id].scope ? `<br><small>근거 범위: ${esc(SRC[id].scope)}</small>` : ""}</td><td>${used[id] ? [...used[id]].join(", ") : "—"}</td></tr>`).join("")}</table></div>`;
+    });
+    main.innerHTML = h + `</div>`;
+  }
+
+  /* ───────── 사용법 ───────── */
+  function renderGuide() {
+    main.innerHTML = `<div class="home guide"><h1>📖 사용법</h1>
+      <div class="howto"><h3>📘 공부 순서</h3>
+      홈의 <b>🚩 완전 처음 시작</b> → U00 → U01 … U12 순서로 읽고, 각 단원 끝의 <b>✍️ 확인 문제</b>로 점검하세요. 섹션을 다 읽으면 <b>읽음</b>을 눌러 진도를 기록합니다.
+      홈 카드에는 <b>읽음 진도</b>와 <b>문제 정답률</b>이 따로 표시됩니다. 모르는 용어는 <a href="#dict">📒 초보자 사전</a>, 계산 연습은 <a href="#calc">🧮 계산기</a>.</div>
+      <div class="howto"><h3>🔗 기기 간 실시간 동기화</h3>
+      왼쪽 목차 아래 <b>🔗 동기화 설정</b>에서 <b>동기화 코드</b>(6자 이상, 나만 아는 문구)를 입력하세요. 노트북·갤럭시탭 등 <b>같은 코드를 입력한 모든 기기</b>에서 필기·읽음 체크·목표 점검·문제 기록이 몇 초 안에 똑같이 보입니다.<br>
+      • 코드는 비밀번호처럼 다루세요. 같은 코드를 아는 사람은 같은 필기를 보고 고칠 수 있어요.<br>
+      • 인터넷이 끊겨도 이 기기에 저장되고, 다시 연결되면 자동으로 올라갑니다.<br>
+      • 같은 페이지를 두 기기에서 <b>동시에</b> 필기하면 나중에 저장된 쪽이 남을 수 있으니, 한 번에 한 기기에서 필기하세요.<br>
+      • 동기화 없이도 <b>💾 백업 저장 / 📂 백업 불러오기</b>로 파일을 옮길 수 있습니다.</div>
+      <div class="howto"><h3>✍️ 필기 툴바</h3>
+      (단원 페이지 오른쪽, 좁은 화면에선 아래) ✏️ 펜 · 🖍️ 형광펜 · 🙈 가림펜 · 🧽 지우개 · ↶ 실행취소<br>
+      • <b>색·굵기 바꾸기</b>: 펜/형광펜/가림펜을 고르면 옵션 창이 열립니다. 색 버튼, 🌈 버튼(원하는 색 직접 고르기), 굵기 버튼 3개 또는 <b>굵기 슬라이더</b>로 조절하고 미리보기로 확인하세요. 이미 고른 도구를 한 번 더 누르면 옵션 창이 다시 열립니다.<br>
+      • <b>가림펜</b>: 외울 부분을 칠하면 가려지고, <b>탭하면 투명</b>해져 답이 보입니다. 👁️로 페이지 전체 보기/가리기.<br>
+      • <b>🧲 스냅</b>(기본 켬): 형광펜·가림펜을 대충 칠해도 글자/단어 크기에 맞게 정리됩니다.<br>
+      • <b>🖊️ 펜전용</b>: 갤럭시탭에서 켜면 손가락은 스크롤, S펜으로만 필기됩니다.<br>
+      • 단축키: <kbd>V</kbd> 읽기 <kbd>P</kbd> 펜 <kbd>H</kbd> 형광펜 <kbd>M</kbd> 가림펜 <kbd>E</kbd> 지우개 <kbd>Ctrl+Z</kbd> 취소</div>
+      <div class="howto"><h3>🏷️ 라벨 읽는 법</h3>
+      <span class="lb off">공식공지</span> 대회 공식 페이지 사실 · <span class="lb tech">기술근거</span> 기술 문서 근거 · <span class="lb plan">교육용 설명</span> 이해를 돕는 재구성 · <span class="lb case">가상자료</span> 임의 값 · <span class="lb news">언론 보도</span> 보도 내용 · <span class="lb add">보강</span> 교재 밖 웹 조사.
+      본문의 <a class="sref" href="#sources">S03</a> 같은 표시는 출처 링크입니다.</div></div>`;
+  }
+
+  /* ───────── 라이트박스 / 토스트 ───────── */
   const lb = document.getElementById("lightbox");
   function openLightbox(src) { if (document.body.classList.contains("drawing")) return; lb.querySelector("img").src = src; lb.classList.add("show"); }
   lb.addEventListener("click", () => lb.classList.remove("show"));
-  let tt; function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), 2200); }
+  let tt; function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), 2400); }
 
-  /* ── 백업 (다른 기기로 옮기기) ── */
-  const bExp = document.getElementById("btn-export"), bImp = document.getElementById("btn-import"), fImp = document.getElementById("file-import");
-  bExp.addEventListener("click", () => {
+  /* ───────── 백업 · 동기화 설정 ───────── */
+  document.getElementById("btn-export").addEventListener("click", () => {
     Ink.flushSave();
     const blob = new Blob([JSON.stringify(Store.exportAll())], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = `${SITE.title.replace(/\s+/g, "")}_백업_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast("💾 백업 파일을 저장했어요. 다른 기기에서 '백업 불러오기'로 여세요");
+    toast("💾 백업 파일을 저장했어요");
   });
-  bImp.addEventListener("click", () => fImp.click());
+  const fImp = document.getElementById("file-import");
+  document.getElementById("btn-import").addEventListener("click", () => fImp.click());
   fImp.addEventListener("change", async e => {
     const f = e.target.files[0]; if (!f) return;
-    try { const n = Store.importAll(JSON.parse(await f.text())); toast(`📂 백업을 불러왔어요 (${n}개 항목)`); route(); }
-    catch (err) { toast(`이 파일은 ${SITE.title} 백업 파일이 아니에요`); }
+    try {
+      const o = JSON.parse(await f.text());
+      if (!o || typeof o !== "object" || Array.isArray(o) || !Object.values(o).every(r => r && typeof r === "object" && "t" in r && "v" in r)) throw new Error("형식");
+      const n = Store.importAll(o); toast(`📂 백업을 불러왔어요 (${n}개 항목)`); route();
+    } catch (err) { toast(`이 파일은 ${SITE.title} 백업 파일이 아니에요`); }
     e.target.value = "";
   });
+  const modal = document.getElementById("sync-modal");
+  function openSync() {
+    const on = Store.syncConnected();
+    modal.querySelector(".state").innerHTML = on ? "🟢 이 기기는 동기화 중입니다." : Store.syncAvailable() ? "이 기기는 아직 동기화되지 않았어요." : "⚠️ 이 주소에서는 동기화를 쓸 수 없어요 (https 웹 주소에서 열어 주세요).";
+    modal.querySelector("[data-off]").style.display = on ? "" : "none";
+    modal.querySelector("input").value = "";
+    modal.classList.add("show");
+    setTimeout(() => modal.querySelector("input").focus(), 50);
+  }
+  document.getElementById("btn-sync").addEventListener("click", openSync);
+  modal.addEventListener("click", e => { if (e.target === modal || e.target.closest("[data-close]")) modal.classList.remove("show"); });
+  modal.querySelector("form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const code = modal.querySelector("input").value.trim();
+    if (code.length < 6) { toast("코드는 6자 이상으로 정해 주세요"); return; }
+    const btn = modal.querySelector("[type=submit]"); btn.disabled = true; btn.textContent = "연결 중…";
+    const ok = await Store.syncConnect(code);
+    btn.disabled = false; btn.textContent = "연결";
+    if (ok) { modal.classList.remove("show"); toast("🟢 동기화 연결! 다른 기기에서도 같은 코드를 입력하세요"); route(); }
+    else toast("🟠 동기화 서버에 연결하지 못했어요. 인터넷을 확인해 주세요");
+  });
+  modal.querySelector("[data-off]").addEventListener("click", () => { Store.syncDisconnect(); modal.classList.remove("show"); toast("동기화를 껐어요. 이 기기 기록은 그대로 남아요"); });
 
-  /* ── 라우팅: #home, #ch01, #ch01.섹션id (claude.ai Artifact 호환 위해 점 구분) ── */
-  function parseHash() { return location.hash.replace(/^#\/?/, "").split(/[./]/); }
+  /* ───────── 라우팅 ───────── */
+  function parseHash() { return decodeURIComponent(location.hash).replace(/^#\/?/, "").split(/[./]/); }
   function route() {
+    if (!UNITS.length) return;
     const parts = parseHash();
     const id = parts[0] === "home" ? "" : parts[0] || "";
     Ink.detach();
     if (ro) { ro.disconnect(); ro = null; }
     page = null;
     main.scrollTop = 0;
-    const L = LECS.find(l => l.id === id);
-    if (L) { crumb.innerHTML = `${unit(L)} · ${L.title}<small>${L.en || ""}</small>`; renderLecture(L, parts[1]); }
-    else { crumb.innerHTML = `${SITE.icon} ${SITE.title}<small>홈</small>`; renderHome(); }
+    const L = UNITS.find(l => l.id === id);
+    if (L) { crumb.innerHTML = `${esc(L.tag)} · ${esc(L.title)}<small>${esc(L.en || "")}</small>`; renderLecture(L, parts[1]); }
+    else if (id === "quiz") { crumb.innerHTML = `✅ 연습문제<small>자체 제작 · 기출 아님</small>`; if (!parts[1] && QS && QS.mode === "unit") QS = null; renderQuiz(parts[1]); }
+    else if (id === "calc") { crumb.innerHTML = `🧮 혼동행렬 계산기`; renderCalc(); }
+    else if (id === "dict") { crumb.innerHTML = `📒 초보자 핵심 사전`; renderDict(); }
+    else if (id === "sources") { crumb.innerHTML = `🔎 출처 모음`; renderSources(); }
+    else if (id === "guide") { crumb.innerHTML = `📖 사용법`; renderGuide(); }
+    else { crumb.innerHTML = `${SITE.icon} ${esc(SITE.title)}<small>홈</small>`; renderHome(); }
     renderSide();
   }
   window.addEventListener("hashchange", route);
   Store.onRemote(keys => {
-    if (!keys.includes("checks") && !keys.includes("goals")) return;
+    if (!keys.some(k => k === "checks" || k === "goals" || k === "quiz")) return;
+    const id = parseHash()[0];
+    if (id === "quiz" || id === "calc") { renderSide(); return; } // 문제 푸는 중엔 화면을 바꾸지 않음
     if (!document.body.classList.contains("drawing")) { const y = main.scrollTop; route(); main.scrollTop = y; } else renderSide();
   });
 
   window.App = { toast, fit };
   if (Store.get("sideOpen", window.innerWidth >= 1100) === false || window.innerWidth < 900) document.body.classList.add("side-closed");
-  route(); // 먼저 이 기기 저장분으로 그리고, 동기화가 연결되면 최신 내용으로 갱신
-  Store.init().then(mode => {
-    const el = document.getElementById("sync-state");
-    el.textContent = mode === "cloud" ? "🟢 내 계정에 저장 · 기기 간 동기화" : mode === "server" ? "🟢 기기 간 동기화 중 (노트북 서버)"
-      : mode === "readonly" ? "💾 이 기기에만 저장 (동기화하려면 편집 권한 필요)" : "💾 이 기기에 자동 저장 · 다른 기기로 옮길 땐 아래 백업";
-  });
+  const syncLabel = mode => mode === "sync" ? "🟢 실시간 동기화 중" : mode === "server" ? "🟢 기기 간 동기화 중 (노트북 서버)" : "💾 이 기기에만 저장 · 🔗 동기화 설정으로 기기 연결";
+  // 먼저 이 기기 저장분으로 그리고, 동기화가 연결되면 최신 내용으로 갱신
+  Promise.all([boot(), Store.init()]).then(([, mode]) => { document.getElementById("sync-state").textContent = syncLabel(mode); if (mode === "sync") route(); });
 })();

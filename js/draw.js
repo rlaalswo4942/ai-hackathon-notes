@@ -3,10 +3,11 @@
  */
 (function () {
   const NS = "http://www.w3.org/2000/svg";
-  const PEN_COLORS = ["#1f2937", "#e03131", "#1971c2", "#2f9e44", "#7048e8", "#f08c00"];
-  const HL_COLORS = ["#ffe066", "#8ce99a", "#ffa8c5", "#a5d8ff", "#ffc078"];
+  const PEN_COLORS = ["#1f2937", "#e03131", "#1971c2", "#2f9e44", "#7048e8", "#f08c00", "#d6336c", "#0c8599", "#868e96"];
+  const HL_COLORS = ["#ffe066", "#8ce99a", "#ffa8c5", "#a5d8ff", "#ffc078", "#d0bfff"];
   const MASK_COLORS = ["#6c5ce7", "#495057", "#e8590c", "#0c8599"];
   const WIDTHS = { pen: [2, 3.5, 6], hl: [12, 20, 30], mask: [14, 22, 34] };
+  const RANGES = { pen: [1, 16, 0.5], hl: [6, 44, 1], mask: [8, 48, 1] }; // 굵기 슬라이더 최소·최대·간격
   const TOOLS = [
     { id: "read", ico: "👆", lab: "읽기", key: "v" },
     { id: "pen", ico: "✏️", lab: "펜", key: "p" },
@@ -58,11 +59,23 @@
     });
     pop.addEventListener("click", e => {
       const sw = e.target.closest("[data-c]"), wd = e.target.closest("[data-w]");
-      const o = opts[opts.tool]; if (!o) return;
+      const o = opts[opts.tool]; if (!o || (!sw && !wd)) return; // 슬라이더·색 고르기 클릭은 다시 그리지 않음
       if (sw) o.c = sw.dataset.c;
       if (wd) o.w = +wd.dataset.w;
       saveOpts(); renderPop(); syncBar();
     });
+    // 굵기 슬라이더·자유 색상: 드래그 중엔 미리보기만 갱신, 손을 떼면 저장
+    pop.addEventListener("input", e => {
+      const o = opts[opts.tool]; if (!o) return;
+      if (e.target.matches("[data-range]")) o.w = +e.target.value;
+      else if (e.target.matches("[data-pick]")) o.c = e.target.value;
+      else return;
+      const p = pop.querySelector(".prev path"); if (p) { p.setAttribute("stroke-width", o.w); p.setAttribute("stroke", o.c); }
+      const wv = pop.querySelector(".wv"); if (wv) wv.textContent = o.w;
+      pop.querySelectorAll(".wd").forEach(b => b.classList.toggle("on", +b.dataset.w === o.w));
+      syncBar();
+    });
+    pop.addEventListener("change", e => { if (e.target.matches("[data-range], [data-pick]")) { saveOpts(); renderPop(); } });
     document.addEventListener("keydown", e => {
       if (!C || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
@@ -91,11 +104,14 @@
   function renderPop() {
     const t = opts.tool, o = opts[t]; if (!o) return;
     const cols = t === "pen" ? PEN_COLORS : t === "hl" ? HL_COLORS : MASK_COLORS;
+    const custom = !cols.includes(o.c), [rmin, rmax, rstep] = RANGES[t];
     let h = `<div class="lab">${t === "pen" ? "펜" : t === "hl" ? "형광펜" : "가림펜 (탭하면 보였다/가렸다)"} 색상</div><div class="row">`;
     cols.forEach(c => (h += `<button class="sw ${o.c === c ? "on" : ""}" data-c="${c}" style="background:${c}"></button>`));
-    h += `</div><div class="lab">굵기${t !== "pen" ? " (스냅 꺼졌을 때)" : ""}</div><div class="row">`;
+    h += `<label class="sw pick ${custom ? "on" : ""}" title="원하는 색 고르기" style="${custom ? "background:" + o.c : ""}"><input type="color" data-pick value="${o.c}"></label>`;
+    h += `</div><div class="lab">굵기 <b class="wv">${o.w}</b>${t !== "pen" ? " <small>(스냅 꺼졌을 때)</small>" : ""}</div><div class="row">`;
     WIDTHS[t].forEach(w => (h += `<button class="wd ${o.w === w ? "on" : ""}" data-w="${w}"><i style="height:${Math.max(2, Math.min(14, w / (t === "pen" ? 1 : 2.4)))}px;${t === "hl" ? "background:" + o.c : ""}"></i></button>`));
-    h += "</div>";
+    h += `</div><input class="wr" type="range" data-range min="${rmin}" max="${rmax}" step="${rstep}" value="${o.w}">
+      <div class="prev"><svg viewBox="0 0 160 30"><path d="M8 20 Q 45 4 80 15 T 152 10" fill="none" stroke="${o.c}" stroke-width="${o.w}" stroke-linecap="round" opacity="${t === "hl" ? 0.5 : 1}"/></svg></div>`;
     pop.innerHTML = h;
     const b = bar.querySelector(`[data-tool="${t}"]`).getBoundingClientRect();
     pop.style.top = Math.max(60, b.top - 10) + "px";

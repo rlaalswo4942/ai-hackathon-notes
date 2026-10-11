@@ -1,0 +1,199 @@
+{
+  "dateChecked": "2026-10-12",
+  "policy": "원본 문서를 직접 확인하여 기술 설명 근거와 행사 일정 근거를 구분했다. 공식 대회 범위·문항 수는 미확인. URL 확인은 향후 변경되지 않음을 보장하지 않는다. 연습 예시는 창작 자료.",
+  "sources": [
+    {
+      "id": "S01",
+      "kind": "official_event",
+      "organization": "SK하이닉스 AI 해커톤 운영 공식 페이지",
+      "title": "SK하이닉스 AI 해커톤 2026",
+      "url": "https://skhynix-hackathon.com/ai-2026",
+      "scope": "공식 일정 및 선발 여정"
+    },
+    {
+      "id": "S02",
+      "kind": "secondary_event_reporting",
+      "organization": "2026-09-21 대회 발표 인용 보도",
+      "title": "SK하이닉스, AI 해커톤 개최…우수 참가자 채용 패스트트랙",
+      "url": "https://v.daum.net/v/7zjNoEoMZl",
+      "scope": "대회 전체 및 예선의 평가 취지 보도. 구체적인 1차 문항 형식·배점의 공식 근거는 아님"
+    },
+    {
+      "id": "S03",
+      "kind": "primary_technical",
+      "organization": "Google Cloud",
+      "title": "What is Machine Learning?",
+      "url": "https://cloud.google.com/learn/what-is-machine-learning",
+      "scope": "ML과 지도·비지도·강화학습"
+    },
+    {
+      "id": "S04",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "Machine Learning Crash Course — Classification",
+      "url": "https://developers.google.com/machine-learning/crash-course/classification",
+      "scope": "분류 문제 이해"
+    },
+    {
+      "id": "S05",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "Dividing datasets",
+      "url": "https://developers.google.com/machine-learning/crash-course/overfitting/dividing-datasets",
+      "scope": "훈련·검증·테스트 데이터"
+    },
+    {
+      "id": "S06",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "Overfitting",
+      "url": "https://developers.google.com/machine-learning/crash-course/overfitting/overfitting",
+      "scope": "과적합·일반화"
+    },
+    {
+      "id": "S07",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "LLMs and Transformers",
+      "url": "https://developers.google.com/machine-learning/crash-course/llm/transformers?hl=ko",
+      "scope": "토큰·트랜스포머·LLM"
+    },
+    {
+      "id": "S08",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "Accuracy, precision, recall",
+      "url": "https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall?hl=ko",
+      "scope": "혼동행렬 지표·F1"
+    },
+    {
+      "id": "S09",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "Embeddings: embedding space",
+      "url": "https://developers.google.com/machine-learning/crash-course/embeddings/embedding-space",
+      "scope": "벡터 임베딩"
+    },
+    {
+      "id": "S10",
+      "kind": "primary_technical",
+      "organization": "Google Cloud",
+      "title": "Retrieval-Augmented Generation",
+      "url": "https://cloud.google.com/use-cases/retrieval-augmented-generation?hl=ko",
+      "scope": "RAG 구조·근거 기반 생성"
+    },
+    {
+      "id": "S11",
+      "kind": "standards_risk",
+      "organization": "NIST",
+      "title": "AI 600-1 Generative AI Profile",
+      "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf",
+      "scope": "Confabulation·개인정보 위험"
+    },
+    {
+      "id": "S12",
+      "kind": "primary_technical",
+      "organization": "OpenAI",
+      "title": "Prompt engineering — OpenAI API",
+      "url": "https://developers.openai.com/api/docs/guides/prompt-engineering",
+      "scope": "명시적 지시·예시·프롬프트 구조"
+    },
+    {
+      "id": "S13",
+      "kind": "primary_technical",
+      "organization": "Anthropic",
+      "title": "Claude Prompting Best Practices (redirect 최종 링크)",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices",
+      "scope": "명료한 지시·예시·문서 구조화"
+    },
+    {
+      "id": "S14",
+      "kind": "primary_technical",
+      "organization": "OpenAI",
+      "title": "Supervised fine-tuning — OpenAI API",
+      "url": "https://developers.openai.com/api/docs/guides/supervised-fine-tuning",
+      "scope": "파인튜닝"
+    },
+    {
+      "id": "S15",
+      "kind": "open_standard",
+      "organization": "Model Context Protocol",
+      "title": "MCP Introduction",
+      "url": "https://modelcontextprotocol.io/docs/2026-07-28/getting-started/intro",
+      "scope": "MCP와 외부 도구·데이터 연결"
+    },
+    {
+      "id": "S16",
+      "kind": "security_owasp",
+      "organization": "OWASP",
+      "title": "LLM06:2025 Excessive Agency",
+      "url": "https://genai.owasp.org/llmrisk/llm062025-excessive-agency/",
+      "scope": "에이전트 권한 위험"
+    },
+    {
+      "id": "S17",
+      "kind": "security_owasp",
+      "organization": "OWASP",
+      "title": "OWASP LLM Top 10 2025 위험 목록",
+      "url": "https://genai.owasp.org/llm-top-10/",
+      "scope": "위험 범주 전체 안내; 프롬프트 인젝션 세부 사항은 S21 참조"
+    },
+    {
+      "id": "S18",
+      "kind": "security_owasp",
+      "organization": "OWASP",
+      "title": "LLM02:2025 Sensitive Information Disclosure",
+      "url": "https://genai.owasp.org/llmrisk/llm022025-sensitive-information-disclosure/",
+      "scope": "민감정보 유출"
+    },
+    {
+      "id": "S19",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "Machine Learning Crash Course — Linear Regression",
+      "url": "https://developers.google.com/machine-learning/crash-course/linear-regression",
+      "scope": "회귀 및 수치형 예측 소개"
+    },
+    {
+      "id": "S20",
+      "kind": "primary_technical",
+      "organization": "OpenAI",
+      "title": "Function Calling — OpenAI API",
+      "url": "https://developers.openai.com/api/docs/guides/function-calling",
+      "scope": "모델과 실제 외부 함수 실행의 인터페이스 구분"
+    },
+    {
+      "id": "S21",
+      "kind": "security_owasp",
+      "organization": "OWASP",
+      "title": "LLM01:2025 Prompt Injection",
+      "url": "https://genai.owasp.org/llmrisk/llm01-prompt-injection/",
+      "scope": "직접·간접 프롬프트 인젝션·대응 방안"
+    },
+    {
+      "id": "S22",
+      "kind": "primary_technical",
+      "organization": "Google Cloud Vision",
+      "title": "Detect and extract text from images (OCR)",
+      "url": "https://docs.cloud.google.com/vision/docs/ocr",
+      "scope": "OCR 문자 추출 역할과 사용 범위"
+    },
+    {
+      "id": "S23",
+      "kind": "primary_technical",
+      "organization": "Google Cloud",
+      "title": "Generative AI Glossary",
+      "url": "https://docs.cloud.google.com/docs/generative-ai/glossary",
+      "scope": "생성형 AI의 텍스트·이미지·오디오·비디오 생성, grounding 기본 정의"
+    },
+    {
+      "id": "S24",
+      "kind": "primary_technical",
+      "organization": "Google for Developers",
+      "title": "Framing an ML Problem",
+      "url": "https://developers.google.com/machine-learning/problem-framing/ml-framing",
+      "scope": "문제 정의와 ML/생성형 AI 적용 판단·출력 형태"
+    }
+  ],
+  "version": "2.0"
+}
