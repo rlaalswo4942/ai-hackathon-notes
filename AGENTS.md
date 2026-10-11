@@ -27,5 +27,7 @@
 
 ## 구조
 - `js/app.js` 라우팅(#home #guide #start #u00~#u12 #review #quiz(.U04) #calc #dict #sources #info #u13 #u14 #extra-review), 사이드바 카테고리
-- `js/draw.js` 필기(펜·형광펜·가림펜·지우개, 스냅, 색 프리셋+자유 색상+굵기 슬라이더)
+- `js/draw.js` 필기(펜·형광펜·가림펜·지우개, 스냅, 색 프리셋+자유 색상+굵기 슬라이더) + 포스트잇(위 막대 이동·불투명도 조절바, 좌/우/아래 가장자리 크기 조절)
+- **좌표는 비율 저장**: 필기 항목 `{a: 기준 요소 id(예: s-s03, top, checklist), pts/rects: 그 요소 상자 기준 0~1}`, 포스트잇 `{a, x, y(비율), w, h(1000px 페이지 기준 px)}` → 기기마다 섹션 높이가 달라도 섹션 안 같은 자리. `a` 없는 예전 절대좌표 필기는 열 때 자동 변환. 페이지 직속 요소에 id가 있어야 기준이 됨(hero=top, pn, quizcard)
+- 저장 키: `ink:<단원id>`, `notes:<단원id>`
 - 단원 id(u00…, info, u13, u14, extra-review)와 섹션 id(s01…)는 필기·체크 저장 키 → 바꾸지 말 것

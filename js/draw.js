@@ -22,7 +22,8 @@
     penOnly: svg('<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M3 3l18 18" opacity=".5"/>'),
     reveal: svg('<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>'),
     clear: svg('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'),
-    collapse: svg('<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>')
+    collapse: svg('<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>'),
+    note: svg('<path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/><path d="M8.5 9h7M8.5 12h4"/>')
   };
   const TOOLS = [
     { id: "read", ico: ICO.read, lab: "읽기", key: "v" },
@@ -36,6 +37,7 @@
   opts.tool = "read";
 
   let C = null; // 현재 페이지 컨텍스트
+  let N = null; // 포스트잇 { layer, items, drag }
   let bar, pop, dot;
   let saveTimer = null;
 
@@ -46,6 +48,7 @@
     dot = document.createElement("div"); dot.className = "eraser-dot";
     let h = "";
     TOOLS.forEach(t => (h += `<button class="tb" data-tool="${t.id}" title="${t.lab} (${t.key.toUpperCase()})">${t.ico}<small>${t.lab}</small>${t.id === "pen" || t.id === "hl" || t.id === "mask" ? '<i class="cdot"></i>' : ""}</button>`));
+    h += `<button class="tb" data-act="note" title="포스트잇 붙이기 — 위 막대를 끌어 이동, 가장자리를 끌어 크기 조절">${ICO.note}<small>포스트잇</small></button>`;
     h += `<hr><button class="tb" data-act="undo" title="실행취소 (Ctrl+Z)">${ICO.undo}<small>취소</small></button>
       <button class="tb" data-act="redo" title="다시실행 (Ctrl+Y)">${ICO.redo}<small>재실행</small></button><hr>
       <button class="tb toggle" data-act="snap" title="형광펜·가림펜을 글자/그림 크기에 맞춤">${ICO.snap}<small>스냅</small></button>
@@ -69,6 +72,7 @@
       else if (a === "redo") redo();
       else if (a === "snap") { opts.snap = !opts.snap; saveOpts(); syncBar(); App.toast(opts.snap ? "스냅 켜짐: 형광펜·가림펜이 글자/그림 크기에 맞춰집니다" : "스냅 꺼짐: 그린 모양 그대로"); }
       else if (a === "penOnly") { opts.penOnly = !opts.penOnly; saveOpts(); syncBar(); App.toast(opts.penOnly ? "펜 전용: 손가락으로는 스크롤, 펜으로만 필기" : "펜 전용 꺼짐: 손가락으로도 필기"); }
+      else if (a === "note") addNote();
       else if (a === "reveal") revealAll();
       else if (a === "clear") clearPage();
       else if (a === "collapse") { opts.collapsed = !opts.collapsed; saveOpts(); syncBar(); hidePop(); }
@@ -144,8 +148,15 @@
     if (!bar) buildBar();
     const svg = document.createElementNS(NS, "svg"); svg.setAttribute("class", "ink");
     const cap = document.createElement("div"); cap.className = "ink-capture";
-    page.append(svg, cap, dot);
-    C = { page, svg, cap, key, getScale, scroller, items: load(key), undo: [], redo: [], cur: null, erasing: null, scroll: null };
+    const layer = document.createElement("div"); layer.className = "postit-layer";
+    page.append(svg, cap, dot, layer);
+    C = { page, svg, cap, key, getScale, scroller, items: load(key), undo: [], redo: [], cur: null, erasing: null, scroll: null, anchors: [], amap: {} };
+    N = { layer, items: [], drag: null };
+    buildAnchors(); migrate();
+    N.items = loadNotes();
+    layer.addEventListener("pointermove", onNoteMove);
+    layer.addEventListener("pointerup", onNoteUp);
+    layer.addEventListener("pointercancel", onNoteUp);
     cap.addEventListener("pointerdown", onDown);
     cap.addEventListener("pointermove", onMove);
     cap.addEventListener("pointerup", onUp);
@@ -161,9 +172,10 @@
   }
   function detach() {
     if (!C) return;
-    flushSave();
+    flushSave(); flushNotes();
     C.svg.remove(); C.cap.remove();
-    C = null;
+    if (N) N.layer.remove();
+    C = null; N = null;
     if (bar) { bar.classList.add("hidden"); hidePop(); }
     document.body.classList.remove("drawing");
   }
@@ -172,11 +184,61 @@
     const h = C.page.offsetHeight;
     C.svg.setAttribute("width", 1000); C.svg.setAttribute("height", h);
     C.svg.setAttribute("viewBox", `0 0 1000 ${h}`);
+    buildAnchors(); renderAll(); renderNotes(); // 레이아웃이 바뀌면 비율 좌표를 다시 계산해 제자리에
   }
   function load(key) { return (Store.get("ink:" + key, []) || []).slice(); }
   function save() { clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 350); }
   function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; if (C) Store.set("ink:" + C.key, C.items); } }
-  function reloadRemote(keys) { if (C && keys.includes("ink:" + C.key) && !C.cur) { C.items = load(C.key); renderAll(); } }
+  function reloadRemote(keys) {
+    if (!C) return;
+    if (keys.includes("ink:" + C.key) && !C.cur) { C.items = load(C.key); renderAll(); }
+    if (N && keys.includes("notes:" + C.key) && !N.drag && !(document.activeElement && N.layer.contains(document.activeElement))) { N.items = loadNotes(); renderNotes(); }
+  }
+
+  /* ── 비율 좌표: 필기·포스트잇은 '들어 있는 섹션 상자' 기준 0~1 비율로 저장
+   *    → 기기마다 글꼴·줄바꿈이 달라 섹션 높이가 변해도 섹션 안의 같은 자리에 표시 ── */
+  const R5 = v => Math.round(v * 100000) / 100000;
+  function buildAnchors() {
+    const list = [];
+    for (const el of C.page.children) {
+      if (!el.id || el === C.svg || el === C.cap) continue;
+      list.push({ id: el.id, x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth || 1, h: el.offsetHeight || 1 });
+    }
+    C.anchors = list; C.amap = {}; list.forEach(a => (C.amap[a.id] = a));
+  }
+  function anchorAt(p) {
+    let best = null, bd = Infinity;
+    for (const a of C.anchors) {
+      const d = p[1] < a.y ? a.y - p[1] : p[1] > a.y + a.h ? p[1] - a.y - a.h : 0;
+      if (d < bd) { bd = d; best = a; }
+      if (!d) break;
+    }
+    return best || { id: "", x: 0, y: 0, w: 1000, h: C.page.offsetHeight };
+  }
+  const pageBox = () => ({ x: 0, y: 0, w: 1000, h: C.page.offsetHeight || 1 });
+  const boxOf = id => (id && C.amap[id]) || pageBox(); // 기준 섹션이 없어졌으면 페이지 전체 기준
+  const relPts = (a, pts) => pts.map(p => [R5((p[0] - a.x) / a.w), R5((p[1] - a.y) / a.h)]);
+  const relRects = (a, rs) => rs.map(r => [R5((r[0] - a.x) / a.w), R5((r[1] - a.y) / a.h), R5(r[2] / a.w), R5(r[3] / a.h)]);
+  // 저장된 항목 → 지금 화면의 페이지 좌표 (a 없는 예전 형식은 절대 좌표 그대로)
+  function geo(it) {
+    if (!("a" in it)) return it;
+    const a = boxOf(it.a);
+    return { pts: it.pts && it.pts.map(p => [a.x + p[0] * a.w, a.y + p[1] * a.h]), rects: it.rects && it.rects.map(r => [a.x + r[0] * a.w, a.y + r[1] * a.h, r[2] * a.w, r[3] * a.h]) };
+  }
+  // 예전(절대 좌표) 필기는 처음 열 때 현재 레이아웃 기준 비율로 바꿔 저장
+  function migrate() {
+    let n = 0;
+    C.items.forEach(it => {
+      if ("a" in it) return;
+      const src = it.pts ? it.pts[0] : it.rects && it.rects[0];
+      if (!src) return;
+      const a = anchorAt(src);
+      if (it.pts) it.pts = relPts(a, it.pts);
+      if (it.rects) it.rects = relRects(a, it.rects);
+      it.a = a.id; n++;
+    });
+    if (n) save();
+  }
 
   /* ── 렌더 ── */
   function smooth(pts) {
@@ -191,7 +253,10 @@
     return d + ` L${l[0]} ${l[1]}`;
   }
   function el(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
-  function renderItem(it) {
+  const GEO = new WeakMap(); // 항목 → 이번 렌더의 페이지 좌표 (지우개·가림 탭 판정용)
+  function renderItem(item) {
+    const gp = geo(item); GEO.set(item, gp);
+    const it = { ...item, pts: gp.pts, rects: gp.rects };
     const g = el("g", { "data-id": it.id });
     if (it.k === "pen") {
       g.append(el("path", { d: smooth(it.pts), fill: "none", stroke: it.c, "stroke-width": it.w, "stroke-linecap": "round", "stroke-linejoin": "round" }));
@@ -277,11 +342,12 @@
     const isTap = span < 8 && performance.now() - cur.t0 < 400;
     if (isTap && (tool === "mask" || tool === "hl")) { if (!toggleAt(pts[0]) && tool === "hl") return; return; }
     let item;
-    if (tool === "pen") item = { k: "pen", c: o.c, w: o.w, pts: simplify(pts, 0.6) };
+    const a = anchorAt(pts[0]); // 획이 시작된 섹션 기준 비율로 저장
+    if (tool === "pen") item = { k: "pen", c: o.c, w: o.w, a: a.id, pts: relPts(a, simplify(pts, 0.6)) };
     else {
       let rects = opts.snap ? Snap.compute(pts, o.w) : null;
-      if (rects && rects.length) item = { k: tool === "hl" ? "hlr" : "maskr", c: o.c, rects };
-      else item = { k: tool, c: o.c, w: o.w, pts: simplify(pts, 0.8) };
+      if (rects && rects.length) item = { k: tool === "hl" ? "hlr" : "maskr", c: o.c, a: a.id, rects: relRects(a, rects) };
+      else item = { k: tool, c: o.c, w: o.w, a: a.id, pts: relPts(a, simplify(pts, 0.8)) };
     }
     item.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     C.items.push(item); C.undo.push({ op: "add", item }); C.redo = [];
@@ -306,7 +372,8 @@
     let t = l2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
     return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
   }
-  function hit(it, p, r) {
+  function hit(item, p, r) {
+    const gp = GEO.get(item) || geo(item), it = { w: item.w, pts: gp.pts, rects: gp.rects };
     if (it.rects) return it.rects.some(q => p[0] >= q[0] - r && p[0] <= q[0] + q[2] + r && p[1] >= q[1] - r && p[1] <= q[1] + q[3] + r);
     const pts = it.pts, rr = it.w / 2 + r;
     if (pts.length === 1) return Math.hypot(p[0] - pts[0][0], p[1] - pts[0][1]) <= rr;
@@ -482,6 +549,113 @@
     } catch (e) { return null; }
   }
 
+  /* ── 포스트잇: 페이지 위 메모지. 위치는 섹션 기준 비율, 크기는 1000px 페이지 기준(화면 배율과 무관)
+   *    위 막대 = 끌어서 이동 + 불투명도 조절바(카카오톡 채팅방 조절바 모양) / 왼쪽·오른쪽·아래 가장자리 = 끌어서 크기 조절 ── */
+  const NOTE_COLORS = ["#fff6a8", "#ffffff", "#e8e8ed", "#ffdfe6", "#dcecff"];
+  const NOTE_MIN = { w: 140, h: 80 };
+  let noteTimer = null;
+  function loadNotes() { return (Store.get("notes:" + C.key, []) || []).map(n => Object.assign({}, n)); }
+  function saveNotes() { clearTimeout(noteTimer); noteTimer = setTimeout(flushNotes, 400); }
+  function flushNotes() { if (noteTimer) { clearTimeout(noteTimer); noteTimer = null; if (C && N) Store.set("notes:" + C.key, N.items); } }
+  function noteAbs(n) { const a = boxOf(n.a); return [a.x + n.x * a.w, a.y + n.y * a.h]; }
+  function setNoteRel(n, x, y) { const a = anchorAt([x, y]); n.a = a.id; n.x = R5((x - a.x) / a.w); n.y = R5((y - a.y) / a.h); }
+  function paper(hex, op) { const v = parseInt(hex.slice(1), 16); return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${op})`; }
+  const topZ = () => N.items.reduce((m, n) => Math.max(m, n.z || 1), 1);
+
+  function renderNotes() {
+    if (!C || !N) return;
+    const seen = new Set();
+    N.items.forEach(n => {
+      seen.add(n.id);
+      let el = N.layer.querySelector(`.postit[data-id="${n.id}"]`);
+      if (!el) { el = noteEl(n); N.layer.append(el); }
+      if (N.drag && N.drag.n === n) return;
+      const [x, y] = noteAbs(n);
+      Object.assign(el.style, { left: x + "px", top: y + "px", width: n.w + "px", height: n.h + "px", zIndex: n.z || 1, background: paper(n.c, n.op) });
+      el.querySelector("[data-op]").value = Math.round(n.op * 100);
+      el.querySelector("[data-color]").style.background = n.c;
+      const ta = el.querySelector("textarea"); if (document.activeElement !== ta && ta.value !== n.text) ta.value = n.text;
+    });
+    N.layer.querySelectorAll(".postit").forEach(el => { if (!seen.has(el.dataset.id)) el.remove(); });
+  }
+  function noteEl(n) {
+    const el = document.createElement("div");
+    el.className = "postit"; el.dataset.id = n.id;
+    el.innerHTML = `<div class="pbar" title="끌어서 이동">
+        <span class="grip"><svg viewBox="0 0 12 16" width="10" height="14"><g fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="9" cy="3" r="1.3"/><circle cx="3" cy="8" r="1.3"/><circle cx="9" cy="8" r="1.3"/><circle cx="3" cy="13" r="1.3"/><circle cx="9" cy="13" r="1.3"/></g></svg></span>
+        <input class="kslider" type="range" min="15" max="100" step="1" data-op title="불투명도" aria-label="불투명도">
+        <button class="pc" data-color title="종이 색 바꾸기" aria-label="종이 색"></button>
+        <button class="px" data-del title="포스트잇 삭제" aria-label="삭제">✕</button></div>
+      <textarea placeholder="메모를 입력하세요" spellcheck="false"></textarea>
+      <i class="rz l" data-rz="l"></i><i class="rz r" data-rz="r"></i><i class="rz b" data-rz="b"></i><i class="rz bl" data-rz="bl"></i><i class="rz br" data-rz="br"></i>`;
+    const item = () => N && N.items.find(x => x.id === n.id);
+    const front = () => { const it = item(); if (it && (it.z || 1) < topZ()) { it.z = topZ() + 1; el.style.zIndex = it.z; saveNotes(); } };
+    el.addEventListener("pointerdown", e => {
+      front();
+      const it = item(); if (!it) return;
+      const rz = e.target.closest("[data-rz]");
+      if (rz) return startDrag(e, it, el, rz.dataset.rz);
+      if (e.target.closest(".pbar") && !e.target.closest("input, button")) return startDrag(e, it, el, "move");
+    });
+    const ta = el.querySelector("textarea");
+    ta.addEventListener("input", () => { const it = item(); if (it) { it.text = ta.value; saveNotes(); } });
+    ta.addEventListener("blur", flushNotes);
+    const sl = el.querySelector("[data-op]");
+    sl.addEventListener("input", () => { const it = item(); if (!it) return; it.op = +sl.value / 100; el.style.background = paper(it.c, it.op); saveNotes(); });
+    el.querySelector("[data-color]").addEventListener("click", () => {
+      const it = item(); if (!it) return;
+      it.c = NOTE_COLORS[(NOTE_COLORS.indexOf(it.c) + 1) % NOTE_COLORS.length];
+      el.style.background = paper(it.c, it.op); el.querySelector("[data-color]").style.background = it.c; saveNotes();
+    });
+    el.querySelector("[data-del]").addEventListener("click", () => {
+      const it = item(); if (!it) return;
+      const now = Date.now();
+      if (it.text.trim() && (!el._armed || now - el._armed > 3000)) { el._armed = now; return App.toast("한 번 더 누르면 이 포스트잇을 지워요"); }
+      N.items = N.items.filter(x => x !== it); el.remove(); saveNotes();
+    });
+    return el;
+  }
+  function startDrag(e, n, el, mode) {
+    e.preventDefault(); e.stopPropagation();
+    const [x0, y0] = noteAbs(n);
+    N.drag = { mode, n, el, cx: e.clientX, cy: e.clientY, x0, y0, w0: n.w, h0: n.h, x: x0, y: y0, id: e.pointerId };
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    el.classList.add("dragging");
+  }
+  function onNoteMove(e) {
+    const d = N && N.drag; if (!d || e.pointerId !== d.id) return;
+    const s = C.getScale(), dx = (e.clientX - d.cx) / s, dy = (e.clientY - d.cy) / s;
+    let x = d.x0, y = d.y0, w = d.w0, h = d.h0;
+    if (d.mode === "move") { x += dx; y += dy; }
+    else {
+      if (d.mode.includes("r")) w = Math.min(1000, Math.max(NOTE_MIN.w, d.w0 + dx));
+      if (d.mode.includes("l")) { w = Math.min(d.x0 + d.w0, Math.max(NOTE_MIN.w, d.w0 - dx)); x = d.x0 + d.w0 - w; }
+      if (d.mode.includes("b")) h = Math.max(NOTE_MIN.h, d.h0 + dy);
+    }
+    const ph = C.page.offsetHeight;
+    w = Math.min(w, 1000); h = Math.min(h, ph);
+    x = Math.max(0, Math.min(1000 - w, x)); y = Math.max(0, Math.min(ph - h, y));
+    d.x = x; d.y = y; d.n.w = Math.round(w); d.n.h = Math.round(h);
+    Object.assign(d.el.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
+  }
+  function onNoteUp(e) {
+    const d = N && N.drag; if (!d || e.pointerId !== d.id) return;
+    N.drag = null; d.el.classList.remove("dragging");
+    setNoteRel(d.n, d.x, d.y); saveNotes();
+  }
+  function addNote() {
+    if (!C || !N) return;
+    const s = C.getScale(), pr = C.page.getBoundingClientRect(), mr = C.scroller.getBoundingClientRect();
+    const w = 260, h = 170, ph = C.page.offsetHeight;
+    const x = Math.max(0, Math.min(1000 - w, (mr.left + mr.width / 2 - pr.left) / s - w / 2));
+    const y = Math.max(0, Math.min(ph - h, (mr.top + mr.height * 0.3 - pr.top) / s));
+    const n = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), w, h, text: "", op: 1, c: NOTE_COLORS[0], z: topZ() + 1 };
+    setNoteRel(n, x, y);
+    N.items.push(n); renderNotes(); saveNotes();
+    setTool("read"); hidePop();
+    const ta = N.layer.querySelector(`.postit[data-id="${n.id}"] textarea`); if (ta) ta.focus({ preventScroll: true });
+  }
+
   Store.onRemote(reloadRemote);
-  window.Ink = { attach, detach, resize, setTool, flushSave };
+  window.Ink = { attach, detach, resize, setTool, flushSave: () => { flushSave(); flushNotes(); } };
 })();

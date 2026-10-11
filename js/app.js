@@ -211,7 +211,7 @@
     Store.set("last", L.id);
     const p = progress(L), C = 2 * Math.PI * 34, goals = L.goals || [];
     const qn = /^U\d\d$/.test(L.tag) ? QUESTIONS.filter(q => q.topic === L.tag).length : 0;
-    let h = `<div class="hero">
+    let h = `<div class="hero" id="top">
       <div class="k">${esc(L.tag)}${L.book ? " · 교재 원문" : " · 보강 자료"}</div><h1>${esc(L.title)}</h1><div class="en">${esc(L.en || "")}</div>
       <div class="hero-row"><button data-jump="checklist">체크리스트</button>${goals.length ? `<button data-jump="goals">목표 점검</button>` : ""}${qn ? `<button data-go="#quiz.${L.tag}">확인 문제 ${qn}개 ›</button>` : ""}</div>
       <svg class="ring" viewBox="0 0 84 84"><circle cx="42" cy="42" r="34" fill="none" stroke="#e8e8ed" stroke-width="6"/><circle class="ring-fg" cx="42" cy="42" r="34" fill="none" stroke="#1d1d1f" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - p.pct / 100)}" transform="rotate(-90 42 42)"/></svg>
@@ -231,9 +231,9 @@
       goals.forEach((g, i) => (h += `<div class="ck goal ${gs[i] ? "done" : ""}" data-goal="${i}"><span class="num">${i + 1}</span><span class="box"></span><span class="lbl">${esc(g)}</span></div>`));
       h += `</div></div>`;
     }
-    if (qn) { const qs = quizStats(L.tag); h += `<div class="card"><h2>이 단원 확인 문제</h2><p>${qn}문항 · 채점 ${qs.graded}개 · 정답률 ${qs.pct != null ? qs.pct + "%" : "—"} <small>(자체 제작 연습문제, 기출 아님)</small></p><button class="pill" data-go="#quiz.${L.tag}">문제 풀기 ›</button></div>`; }
+    if (qn) { const qs = quizStats(L.tag); h += `<div class="card" id="quizcard"><h2>이 단원 확인 문제</h2><p>${qn}문항 · 채점 ${qs.graded}개 · 정답률 ${qs.pct != null ? qs.pct + "%" : "—"} <small>(자체 제작 연습문제, 기출 아님)</small></p><button class="pill" data-go="#quiz.${L.tag}">문제 풀기 ›</button></div>`; }
     const seq = UNITS, idx = seq.indexOf(L), prev = seq[idx - 1], next = seq[idx + 1];
-    h += `<div class="pn">${prev ? `<button data-go="#${prev.id}"><small>‹ 이전</small>${esc(prev.tag)} ${esc(prev.title)}</button>` : "<span></span>"}${next ? `<button data-go="#${next.id}"><small>다음 ›</small>${esc(next.tag)} ${esc(next.title)}</button>` : `<button data-go="#home"><small>마지막</small>홈으로</button>`}</div>`;
+    h += `<div class="pn" id="pn">${prev ? `<button data-go="#${prev.id}"><small>‹ 이전</small>${esc(prev.tag)} ${esc(prev.title)}</button>` : "<span></span>"}${next ? `<button data-go="#${next.id}"><small>다음 ›</small>${esc(next.tag)} ${esc(next.title)}</button>` : `<button data-go="#home"><small>마지막</small>홈으로</button>`}</div>`;
 
     main.innerHTML = `<div class="scaler"><div class="page" id="page">${h}</div></div>`;
     scaler = main.querySelector(".scaler"); page = main.querySelector(".page");
@@ -245,6 +245,7 @@
   }
   function onPageClick(L, e) {
     const t = e.target;
+    if (t.closest(".postit")) return; // 포스트잇 안의 클릭은 페이지 동작과 분리
     if (t.closest("a[href^='http']")) return;
     const jump = t.closest("[data-jump]"); if (jump) return jumpTo(jump.dataset.jump);
     const go = t.closest("[data-goto]"); if (go) { e.stopPropagation(); return jumpTo("s-" + go.dataset.goto); }
@@ -441,6 +442,14 @@
       • <b>스냅</b>(기본 켬): 형광펜·가림펜을 대충 칠해도 글자/단어 크기에 맞게 정리됩니다.<br>
       • <b>펜전용</b>: 갤럭시탭에서 켜면 손가락은 스크롤, S펜으로만 필기됩니다.<br>
       • 단축키: <kbd>V</kbd> 읽기 <kbd>P</kbd> 펜 <kbd>H</kbd> 형광펜 <kbd>M</kbd> 가림펜 <kbd>E</kbd> 지우개 <kbd>Ctrl+Z</kbd> 취소</div>
+      <div class="howto"><h3>포스트잇</h3>
+      필기 툴바의 <b>포스트잇</b>을 누르면 지금 보는 위치에 메모지가 붙습니다. 바로 글을 입력하세요.<br>
+      • <b>이동</b>: 위쪽 막대(점 6개 부분)를 끌어서 옮깁니다.<br>
+      • <b>크기</b>: 왼쪽·오른쪽·아래 가장자리나 아래 모서리를 끌어서 조절합니다.<br>
+      • <b>불투명도</b>: 위쪽 막대의 가는 선 조절바를 좌우로 움직이면 메모지가 비쳐서 아래 본문을 함께 볼 수 있어요.<br>
+      • 동그란 버튼으로 종이 색, ✕로 삭제(내용이 있으면 한 번 더 눌러 확인). 메모도 동기화됩니다.</div>
+      <div class="howto"><h3>기기마다 같은 자리에</h3>
+      필기와 포스트잇은 화면 픽셀이 아니라 <b>들어 있는 섹션 안의 비율 위치</b>로 저장됩니다. 노트북·태블릿에서 글꼴이나 줄바꿈이 조금 달라 섹션 길이가 바뀌어도, 섹션 안의 같은 위치에 표시됩니다.</div>
       <div class="howto"><h3>라벨 읽는 법</h3>
       <span class="lb off">공식공지</span> 대회 공식 페이지 사실 · <span class="lb tech">기술근거</span> 기술 문서 근거 · <span class="lb plan">교육용 설명</span> 이해를 돕는 재구성 · <span class="lb case">가상자료</span> 임의 값 · <span class="lb news">언론 보도</span> 보도 내용 · <span class="lb add">보강</span> 교재 밖 웹 조사.
       본문의 <a class="sref" href="#sources">S03</a> 같은 표시는 출처 링크입니다.</div></div>`;
@@ -520,7 +529,8 @@
     if (!keys.some(k => k === "checks" || k === "goals" || k === "quiz")) return;
     const id = parseHash()[0];
     if (id === "quiz" || id === "calc") { renderSide(); return; } // 문제 푸는 중엔 화면을 바꾸지 않음
-    if (!document.body.classList.contains("drawing")) { const y = main.scrollTop; route(); main.scrollTop = y; } else renderSide();
+    const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest(".postit");
+    if (!document.body.classList.contains("drawing") && !typing) { const y = main.scrollTop; route(); main.scrollTop = y; } else renderSide();
   });
 
   window.App = { toast, fit };

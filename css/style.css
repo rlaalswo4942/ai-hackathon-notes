@@ -470,3 +470,39 @@ a { color: var(--ink); text-underline-offset: 3px; }
 .eraser-dot { border-color: var(--ink); background: rgba(0, 0, 0, .05); }
 body { word-break: keep-all; overflow-wrap: anywhere; }
 .src li, .home td a { word-break: break-all; }
+
+/* ── 포스트잇 ── */
+.postit-layer { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.postit { position: absolute; pointer-events: auto; display: flex; flex-direction: column; border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .10), 0 0 0 1px rgba(0, 0, 0, .07); min-width: 140px; min-height: 80px; }
+.postit.dragging { box-shadow: 0 14px 36px rgba(0, 0, 0, .18), 0 0 0 1px rgba(0, 0, 0, .1); }
+.postit .pbar { flex: none; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 8px; cursor: grab; touch-action: none;
+  border-bottom: 1px solid rgba(0, 0, 0, .06); border-radius: 12px 12px 0 0; background: rgba(255, 255, 255, .55); user-select: none; }
+.postit.dragging .pbar { cursor: grabbing; }
+.postit .grip { color: #8e8e93; display: grid; place-items: center; flex: none; }
+.postit .pc { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1px solid #8e8e93; padding: 0; }
+.postit .px { flex: none; border: 0; background: none; color: #6e6e73; font-size: 13px; width: 22px; height: 22px; border-radius: 50%; padding: 0; line-height: 22px; }
+.postit .px:hover { background: rgba(0, 0, 0, .06); color: var(--ink); }
+.postit textarea { flex: 1; min-height: 0; border: 0; outline: 0; background: transparent; resize: none; padding: 8px 12px 12px;
+  font: inherit; font-size: 15px; line-height: 1.55; color: #1d1d1f; letter-spacing: -0.01em; }
+.postit textarea::placeholder { color: #8e8e93; }
+/* 불투명도 조절바 — 가는 선 + 속이 빈 동그란 손잡이 (카카오톡 채팅방 조절바 모양) */
+.kslider { -webkit-appearance: none; appearance: none; flex: 1; min-width: 40px; height: 22px; margin: 0; background: transparent; cursor: pointer; touch-action: none; }
+.kslider:focus { outline: none; }
+.kslider::-webkit-slider-runnable-track { height: 1px; background: #8e8e93; border: 0; }
+.kslider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6.5px; border-radius: 50%; background: #fff; border: 1px solid #8e8e93; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.kslider::-moz-range-track { height: 1px; background: #8e8e93; border: 0; }
+.kslider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 1px solid #8e8e93; }
+.kslider:active::-webkit-slider-thumb { border-color: #1d1d1f; }
+/* 가장자리 끌어서 크기 조절 */
+.postit .rz { position: absolute; z-index: 2; touch-action: none; }
+.postit .rz.l, .postit .rz.r { top: 30px; bottom: 10px; width: 14px; cursor: ew-resize; }
+.postit .rz.l { left: -7px; } .postit .rz.r { right: -7px; }
+.postit .rz.b { left: 10px; right: 10px; bottom: -7px; height: 14px; cursor: ns-resize; }
+.postit .rz.bl, .postit .rz.br { width: 18px; height: 18px; bottom: -8px; }
+.postit .rz.bl { left: -8px; cursor: nesw-resize; } .postit .rz.br { right: -8px; cursor: nwse-resize; }
+.postit .rz.l::after, .postit .rz.r::after { content: ""; position: absolute; top: 50%; left: 5px; width: 4px; height: 26px; margin-top: -13px; border-radius: 4px; background: rgba(0, 0, 0, .16); opacity: 0; transition: opacity .15s; }
+.postit .rz.b::after { content: ""; position: absolute; left: 50%; top: 5px; width: 26px; height: 4px; margin-left: -13px; border-radius: 4px; background: rgba(0, 0, 0, .16); opacity: 0; transition: opacity .15s; }
+.postit:hover .rz::after, .postit.dragging .rz::after, .postit:focus-within .rz::after { opacity: 1; }
+@media (hover: none) { .postit .rz::after { opacity: 1; } }
+.postit .pbar { background: rgba(250, 250, 250, .94); }
