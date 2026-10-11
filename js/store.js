@@ -37,7 +37,8 @@
     const epoch = window.SITE && SITE.resetEpoch; if (!epoch) return;
     const EK = KEY + "-reset-epoch";
     if (lsRaw(EK) === epoch) return;
-    const keys = (SITE.resetKeys || ["checks", "goals", "quiz", "last", "calc"]);
+    // resetKeys: "*" = 필기·포스트잇·설정까지 이 사이트의 모든 기록, 생략 = 진도만
+    const keys = SITE.resetKeys === "*" ? lsKeys() : (SITE.resetKeys || ["checks", "goals", "quiz", "last", "calc"]);
     // 빈 값을 '지금' 시각으로 기록 → 동기화할 때 서버·다른 기기의 예전 진도보다 최신이라 초기화가 함께 퍼짐
     const now = Date.now();
     keys.forEach(k => lsSet(k, { t: now, v: null }));
