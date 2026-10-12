@@ -511,3 +511,10 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .qcode { background: #f5f5f7; border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; font: 15px/1.55 ui-monospace, Consolas, monospace; white-space: pre; overflow-x: auto; tab-size: 4; }
 .choices.mono .choice { font-family: ui-monospace, Consolas, monospace; }
 details { margin: 10px 0; } details summary { cursor: pointer; font-weight: 700; }
+/* 포스트잇 필기/타이핑 전환 스위치 + 메모지 안 필기 레이어 */
+.postit .pmode { flex: none; display: flex; align-items: center; height: 20px; padding: 2px; border: 1px solid #c7c7cc; border-radius: 10px; background: #fff; gap: 0; }
+.postit .pmode span { width: 18px; height: 14px; border-radius: 7px; font-size: 10px; line-height: 14px; text-align: center; color: #8e8e93; font-weight: 700; }
+.postit:not(.inkmode) .pmode span:first-child, .postit.inkmode .pmode span:last-child { background: #1d1d1f; color: #fff; }
+.postit .pink { position: absolute; left: 0; right: 0; top: 30px; bottom: 0; width: 100%; height: calc(100% - 30px); overflow: hidden; pointer-events: none; }
+.postit.inkmode .pink { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.postit.inkmode textarea { pointer-events: none; }
