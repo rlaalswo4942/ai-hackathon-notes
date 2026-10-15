@@ -7,7 +7,7 @@
   const main = document.getElementById("main");
   const crumb = document.getElementById("crumb");
   let scale = 1, page = null, scaler = null, ro = null;
-  let UNITS = [], BOOK = [], QUESTIONS = [], QNOTICE = "", SRC = {}, DICT = [], PREFACE = "", MAP = {};
+  let UNITS = [], BOOK = [], QUESTIONS = [], QNOTICE = "", SRC = {}, DICT = [], PREFACE = "", MAP = {}, EXAM = null;
 
   document.title = SITE.title;
   document.head.insertAdjacentHTML("beforeend", `<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>${SITE.icon}</text></svg>">`);
@@ -20,7 +20,7 @@
   }, SITE.book || {});
   const BK = Object.assign({}, BKraw, { start: new RegExp(BKraw.start), dict: new RegExp(BKraw.dict), goals: new RegExp(BKraw.goals), map: new RegExp(BKraw.map) });
   const LB = Object.assign({ book: "", extra: "", extraGroup: "보강 자료", sources: "출처가 있다는 것은 개념의 근거라는 뜻입니다.", dictTitle: "용어 사전", calcTitle: "혼동행렬 계산기", quizNote: "자체 제작 연습문제", scoreNote: "실제 시험 점수와 무관합니다." }, SITE.labels || {});
-  const FEAT = Object.assign({ calc: false }, SITE.features || {});
+  const FEAT = Object.assign({ calc: false, exam: false, login: false }, SITE.features || {});
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const tagOf = L => L.tag;
 
@@ -124,6 +124,7 @@
       s.sources.forEach(x => (SRC[x.id] = { t: `${x.organization} — ${x.title}`, u: x.url, kind: KIND[x.kind] || x.kind || "참고 자료", scope: x.scope }));
       Object.entries(window.RESEARCH_SOURCES || {}).forEach(([id, x]) => (SRC[id] = x));
       QUESTIONS = q.questions; QNOTICE = q.notice;
+      if (FEAT.exam) EXAM = await fetch("content/exam.json", { cache: "no-cache" }).then(r => r.ok ? r.json() : null).catch(() => null);
       const b = parseBook(t);
       BOOK = b.units.filter(u => u.id !== "start");
       UNITS = [...b.units, b.review, ...(window.EXTRA || [])].filter(Boolean);
@@ -152,7 +153,7 @@
   const GROUPS = () => [
     { h: "시작", items: [{ id: "", t: "홈" }, { id: "guide", t: "사용법 · 동기화 안내" }, uItem("start")] },
     { h: "교재", items: BOOK.map(L => uItem(L.id)) },
-    { h: "연습 · 도구", items: [QUESTIONS.length && { id: "quiz", t: "연습문제", sub: () => { const s = quizStats(); return `응답 ${s.graded}/${s.total}${s.pct != null ? " · 정답률 " + s.pct + "%" : ""}`; } }, FEAT.calc && { id: "calc", t: LB.calcTitle }, DICT.length && { id: "dict", t: LB.dictTitle }, uItem("review")] },
+    { h: "연습 · 도구", items: [QUESTIONS.length && { id: "quiz", t: "연습문제", sub: () => { const s = quizStats(); return `응답 ${s.graded}/${s.total}${s.pct != null ? " · 정답률 " + s.pct + "%" : ""}`; } }, EXAM && { id: "exam", t: "모의고사", sub: () => `${EXAM.sets.length}개 유형 · 유형별 ${EXAM.sets[0].items.length}문항` }, FEAT.calc && { id: "calc", t: LB.calcTitle }, DICT.length && { id: "dict", t: LB.dictTitle }, uItem("review")] },
     (window.EXTRA || []).length && { h: LB.extraGroup, items: (window.EXTRA || []).map(L => uItem(L.id)) },
     { h: "근거", items: [{ id: "sources", t: "출처 모음" }] }
   ];
@@ -192,7 +193,8 @@
       <h2 class="grp">교재 <small>${esc(LB.book)}</small></h2><div class="cat-grid">`;
     BOOK.forEach(L => (h += card(L)));
     h += `</div><h2 class="grp">연습 · 복습</h2><div class="cat-grid">`;
-    if (QUESTIONS.length) h += tool("quiz", "PRACTICE", `연습문제 ${QUESTIONS.length}문항`, "입문·기본·응용·계산 · 단원별 · 오답 다시 풀기");
+    if (QUESTIONS.length) h += tool("quiz", "PRACTICE", `연습문제 ${QUESTIONS.length}문항`, "공부한 범위 · 입문·기본·응용·계산 · 단원별 · 오답 다시 풀기");
+    if (EXAM) h += tool("exam", "MOCK EXAM", `모의고사 ${EXAM.sets.length}개 유형`, "빈칸 단답 · O/X · 질문형 단답 · 코드 작성 — 시험지처럼 한 장에 풀고 한 번에 채점");
     if (FEAT.calc) h += tool("calc", "TOOL", LB.calcTitle, "TP·TN·FP·FN을 넣어 정확도·정밀도·재현율·F1 계산");
     if (DICT.length) h += tool("dict", "TOOL", LB.dictTitle, `교재의 용어 ${DICT.length}개 검색`);
     const rvL = UNITS.find(u => u.id === "review"); if (rvL) h += card(rvL);
@@ -295,6 +297,8 @@
   /* ───────── 연습문제 ───────── */
   let QS = null; // 현재 풀이 세션 { mode, topic, list:[id], i, answered:{id:{a,ok}} }
   const LEVEL_MODES = { basic: ["입문", "기본"], applied: ["응용", "계산"] };
+  // 공부한 범위 = 읽음 체크가 하나라도 있는 단원
+  const studiedTags = () => { const c = checks(); return new Set(BOOK.filter(L => c[L.id] && Object.values(c[L.id]).some(Boolean)).map(L => L.tag)); };
   function quizList(mode, topic) {
     const st = quizSt();
     let list = QUESTIONS;
@@ -302,6 +306,7 @@
     else if (mode === "applied") list = list.filter(q => LEVEL_MODES.applied.includes(q.level));
     else if (mode === "unit") list = list.filter(q => q.topic === topic);
     else if (mode === "wrong") list = list.filter(q => st[q.id] && !st[q.id].ok);
+    else if (mode === "studied") { const t = studiedTags(); list = list.filter(q => t.has(q.topic)); }
     const ids = list.map(q => q.id);
     for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } // 문제 순서만 섞음 (보기 순서는 원본 유지)
     return ids;
@@ -309,11 +314,12 @@
   function renderQuiz(topic) {
     if (topic && !QS) QS = { mode: "unit", topic, list: quizList("unit", topic), i: 0, answered: {} };
     if (topic && QS && (QS.mode !== "unit" || QS.topic !== topic)) QS = { mode: "unit", topic, list: quizList("unit", topic), i: 0, answered: {} };
-    const s = quizStats(), st = quizSt(), wrongN = QUESTIONS.filter(q => st[q.id] && !st[q.id].ok).length;
+    const s = quizStats(), st = quizSt(), wrongN = QUESTIONS.filter(q => st[q.id] && !st[q.id].ok).length, studied = studiedTags(), studiedN = QUESTIONS.filter(q => studied.has(q.topic)).length;
     let h = `<div class="home quiz"><h1>연습문제</h1>
       <div class="notice"><b>${esc(QNOTICE)}</b> 정답률은 <b>정답 수 ÷ 채점된 응답 수 × 100</b>(미응답 제외)이며 ${esc(LB.scoreNote)}</div>
       <div class="overall"><b>전체</b><span class="bar"><i style="width:${s.total ? s.graded / s.total * 100 : 0}%"></i></span><small>채점 ${s.graded}/${s.total}</small><b>정답률 ${s.pct != null ? s.pct + "%" : "—"}</b>${wrongN ? `<small>오답 ${wrongN}개</small>` : ""}</div>
       <div class="modes">
+        <button data-mode="studied" ${studiedN ? "" : "disabled"} title="${studied.size ? "체크한 단원: " + esc([...studied].join(" · ")) : "교재에서 읽음 체크를 하면 그 단원 문제가 나와요"}">공부한 범위 <small>${studied.size ? studied.size + "개 단원 · " + studiedN : "체크 없음"}</small></button>
         <button data-mode="basic">기본 모드 <small>입문·기본 ${QUESTIONS.filter(q => LEVEL_MODES.basic.includes(q.level)).length}</small></button>
         <button data-mode="all">전 범위 <small>${QUESTIONS.length}</small></button>
         <button data-mode="applied">응용 문제 <small>응용·계산 ${QUESTIONS.filter(q => LEVEL_MODES.applied.includes(q.level)).length}</small></button>
@@ -333,7 +339,7 @@
   }
   function drawQ() {
     const box = document.getElementById("qbox"); if (!box) return;
-    if (!QS) { box.innerHTML = `<div class="qcard empty">위에서 모드를 고르면 문제가 시작됩니다. 처음이면 <b>기본 모드</b>를 추천해요.</div>`; return; }
+    if (!QS) { box.innerHTML = `<div class="qcard empty">위에서 모드를 고르면 문제가 시작됩니다. 공부하면서 읽음 체크를 했다면 <b>공부한 범위</b>, 처음이면 <b>기본 모드</b>를 추천해요.</div>`; return; }
     if (!QS.list.length) { box.innerHTML = `<div class="qcard empty">이 모드에 해당하는 문제가 없어요.</div>`; return; }
     if (QS.i >= QS.list.length) {
       const a = Object.values(QS.answered), ok = a.filter(x => x.ok).length;
@@ -370,6 +376,70 @@
     st[q.id] = { a, ok, n: r.n + 1, t: Date.now() };
     Store.set("quiz", st);
     drawQ(); renderSide();
+  }
+
+  /* ───────── 모의고사 (features.exam, content/exam.json) ─────────
+   * 시험지처럼 한 장에 풀고 한 번에 채점. 문항 t: blank(q 안의 "( )" 자리에 입력) · ox · short · code(모범 답안 보고 자가 채점)
+   * 저장: exam = { <세트id>: { ans: {번호: 답}, ok: {번호: true|false|null} (채점 후에만), at } } */
+  const examSt = () => Store.get("exam", {});
+  const normAns = s => String(s == null ? "" : s).normalize("NFKC").toLowerCase().replace(/[\s`'"“”‘’()@.\-_]/g, "");
+  function examScore(set, r) { return set.items.filter((_, i) => r.ok && r.ok[i]).length; }
+  function renderExam(setId) {
+    const set = EXAM.sets.find(s => s.id === setId), all = examSt();
+    if (!set) {
+      main.innerHTML = `<div class="home"><h1>모의고사</h1><div class="notice">${esc(EXAM.notice || "")}</div>
+        <p class="sub">유형마다 문항이 다릅니다. 답은 입력하는 대로 저장되고, <b>제출하고 채점</b>을 누르면 한 번에 채점됩니다. 코드 작성 문항은 모범 답안과 비교해 직접 채점하세요.</p>
+        <div class="cat-grid">${EXAM.sets.map(s => { const r = all[s.id] || {}; return tool("exam." + s.id, `${s.items.length}문항`, esc(s.name), r.ok ? `최근 점수 ${examScore(s, r)} / ${s.items.length}` : Object.keys(r.ans || {}).length ? "푸는 중 — 이어서 풀기" : "아직 안 풂"); }).join("")}</div></div>`;
+      main.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => (location.hash = b.dataset.go)));
+      return;
+    }
+    const r = all[set.id] || { ans: {} }, graded = !!r.ok, ans = r.ans || {};
+    const unitLink = tag => { const L = BOOK.find(u => u.tag === tag); return L ? ` <a href="#${L.id}">${L.tag} ${esc(L.title)} ›</a>` : ""; };
+    let h = `<div class="home exam"><p class="eyebrow">모의고사</p><h1>${esc(set.name)}</h1>`;
+    if (graded) {
+      const pend = set.items.filter((it, i) => it.t === "code" && r.ok[i] == null).length;
+      h += `<div class="overall"><b class="ex-score">${examScore(set, r)} / ${set.items.length}</b><small>${pend ? "코드 문항 자가 채점이 남았어요" : "채점 완료"} · ${esc(LB.scoreNote)}</small></div>`;
+    }
+    h += `<ol class="exam-sheet">`;
+    set.items.forEach((it, i) => {
+      const a = ans[i] == null ? "" : ans[i], ok = graded ? r.ok[i] : undefined, dis = graded ? "disabled" : "";
+      h += `<li class="ex-item ${ok === true ? "ok" : ok === false ? "no" : ""}" data-i="${i}"><span class="n">${i + 1}.</span> `;
+      if (it.t === "blank") { const [x, y = ""] = it.q.split("( )"); h += `${esc(x)}(<input class="ex-blank" data-i="${i}" value="${esc(a)}" ${dis} autocomplete="off" autocapitalize="off" spellcheck="false">)${esc(y)}`; }
+      else if (it.t === "ox") h += `${esc(it.q)} <span class="ox">${["O", "X"].map(v => `<button data-ox="${v}" data-i="${i}" class="${a === v ? "on" : ""}" ${dis}>${v}</button>`).join("")}</span>`;
+      else if (it.t === "short") h += `${esc(it.q)}<input class="ex-short" data-i="${i}" value="${esc(a)}" ${dis} autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="답">`;
+      else h += `${esc(it.q)}<textarea class="ex-code" data-i="${i}" ${dis} spellcheck="false" autocapitalize="off" placeholder="여기에 코드를 작성하세요">${esc(a)}</textarea>`;
+      if (graded) {
+        h += `<div class="ex-res">`;
+        if (it.t === "code") {
+          h += `<b>모범 답안</b><pre class="qcode">${esc(it.a)}</pre><b>채점 기준</b><ul>${(it.pts || []).map(p => `<li>${esc(p)}</li>`).join("")}</ul>
+            <div class="ox self">내 답은 ${["맞음", "틀림"].map((v, j) => `<button data-self="${j ? 0 : 1}" data-i="${i}" class="${ok === !j ? "on" : ""}">${v}</button>`).join("")}</div>`;
+        } else {
+          h += `<b class="${ok ? "ok" : "no"}">${ok ? "정답" : "오답"}</b> · 정답: <b>${esc(it.t === "ox" ? it.a : it.a[0])}</b>${it.t !== "ox" && it.a.length > 1 ? ` <small>(${it.a.slice(1).map(esc).join(", ")}도 정답)</small>` : ""}`;
+          if (it.t !== "ox") h += ` <button class="flip" data-flip="${i}">${ok ? "오답으로 바꾸기" : "맞은 걸로 바꾸기"}</button>`;
+        }
+        h += `<div>${esc(it.ex || "")}${unitLink(it.topic)}</div></div>`;
+      }
+      h += `</li>`;
+    });
+    h += `</ol><div class="qnav">${graded ? `<button class="pill ghost" data-retry>다시 풀기</button>` : `<span class="hint">답은 입력하는 대로 저장됩니다</span>`}<span><a href="#exam">유형 목록</a> ${graded ? "" : `<button class="pill" data-submit>제출하고 채점</button>`}</span></div></div>`;
+    main.innerHTML = h;
+    const save = () => { all[set.id] = r; r.ans = ans; Store.set("exam", all); };
+    main.querySelectorAll("input[data-i], textarea[data-i]").forEach(el => el.addEventListener("input", () => { ans[el.dataset.i] = el.value; save(); }));
+    main.querySelectorAll("textarea.ex-code").forEach(el => el.addEventListener("keydown", e => { if (e.key === "Tab") { e.preventDefault(); el.setRangeText("    ", el.selectionStart, el.selectionEnd, "end"); el.dispatchEvent(new Event("input")); } }));
+    const rerender = () => { const y = main.scrollTop; renderExam(set.id); main.scrollTop = y; };
+    main.querySelectorAll("[data-ox]").forEach(b => b.addEventListener("click", () => { ans[b.dataset.i] = b.dataset.ox; save(); rerender(); }));
+    main.querySelectorAll("[data-self]").forEach(b => b.addEventListener("click", () => { r.ok[b.dataset.i] = b.dataset.self === "1"; save(); rerender(); }));
+    main.querySelectorAll("[data-flip]").forEach(b => b.addEventListener("click", () => { r.ok[b.dataset.flip] = !r.ok[b.dataset.flip]; save(); rerender(); }));
+    const sb = main.querySelector("[data-submit]");
+    if (sb) sb.addEventListener("click", () => {
+      const empty = set.items.filter((_, i) => !String(ans[i] || "").trim()).length;
+      if (empty && !confirm(`${empty}문항이 비어 있어요. 그대로 채점할까요?`)) return;
+      r.ok = {};
+      set.items.forEach((it, i) => { r.ok[i] = it.t === "code" ? null : it.t === "ox" ? ans[i] === it.a : it.a.some(x => normAns(x) === normAns(ans[i])); });
+      r.at = Date.now(); save(); renderExam(set.id); main.scrollTop = 0;
+    });
+    const rb = main.querySelector("[data-retry]");
+    if (rb) rb.addEventListener("click", () => { if (!confirm("답과 채점 결과를 지우고 다시 풀까요?")) return; all[set.id] = { ans: {} }; Store.set("exam", all); renderExam(set.id); main.scrollTop = 0; });
   }
 
   /* ───────── 혼동행렬 계산기 ───────── */
@@ -439,12 +509,17 @@
       <div class="howto"><h3>공부 순서</h3>
       홈의 <b>처음부터 시작하기</b>를 누르고 교재 단원을 순서대로 읽고, 각 단원 끝의 <b>확인 문제</b>로 점검하세요. 섹션을 다 읽으면 <b>읽음</b>을 눌러 진도를 기록합니다.
       홈 카드에는 <b>읽음 진도</b>와 <b>문제 정답률</b>이 따로 표시됩니다. ${DICT.length ? `모르는 용어는 <a href="#dict">${esc(LB.dictTitle)}</a>에서 찾으세요.` : ""}</div>
-      <div class="howto"><h3>기기 간 실시간 동기화</h3>
+      ${FEAT.login ? `<div class="howto"><h3>이름(아이디)과 여러 기기</h3>
+      처음 들어올 때 정한 <b>이름이 내 아이디</b>입니다(비밀번호 없음). 필기·읽음 체크·목표 점검·문제·모의고사 기록은 <b>내 이름에만</b> 저장되고, 다른 사람의 기록은 보이지 않아요.<br>
+      • 노트북·태블릿 등 다른 기기에서 <b>같은 이름</b>을 입력하면 몇 초 안에 같은 기록으로 이어집니다.<br>
+      • 이름을 아는 사람은 그 이름으로 들어올 수 있으니 겹치지 않는 이름을 쓰세요.<br>
+      • 기기를 다른 사람에게 넘길 때는 목차 아래 <b>로그아웃</b>을 누르세요(서버의 기록은 그대로 남아요).<br>
+      • 인터넷이 끊겨도 이 기기에 저장되고, 다시 연결되면 자동으로 올라갑니다.</div>` : `<div class="howto"><h3>기기 간 실시간 동기화</h3>
       왼쪽 목차 아래 <b>동기화 설정</b>에서 <b>동기화 코드</b>(6자 이상, 나만 아는 문구)를 입력하세요. 노트북·갤럭시탭 등 <b>같은 코드를 입력한 모든 기기</b>에서 필기·읽음 체크·목표 점검·문제 기록이 몇 초 안에 똑같이 보입니다.<br>
       • 코드는 비밀번호처럼 다루세요. 같은 코드를 아는 사람은 같은 필기를 보고 고칠 수 있어요.<br>
       • 인터넷이 끊겨도 이 기기에 저장되고, 다시 연결되면 자동으로 올라갑니다.<br>
       • 같은 페이지를 두 기기에서 <b>동시에</b> 필기하면 나중에 저장된 쪽이 남을 수 있으니, 한 번에 한 기기에서 필기하세요.<br>
-      • 동기화 없이도 <b>백업 저장 / 백업 불러오기</b>로 파일을 옮길 수 있습니다.</div>
+      • 동기화 없이도 <b>백업 저장 / 백업 불러오기</b>로 파일을 옮길 수 있습니다.</div>`}
       <div class="howto"><h3>필기 툴바</h3>
       (단원 페이지 오른쪽, 좁은 화면에선 아래) 펜 · 형광펜 · 가림펜 · 지우개 · ↶ 실행취소<br>
       • <b>색·굵기 바꾸기</b>: 펜/형광펜/가림펜을 고르면 옵션 창이 열립니다. 색 버튼, 무지개 버튼(원하는 색 직접 고르기), 굵기 버튼 3개 또는 <b>굵기 슬라이더</b>로 조절하고 미리보기로 확인하세요. 이미 고른 도구를 한 번 더 누르면 옵션 창이 다시 열립니다.<br>
@@ -519,6 +594,64 @@
   });
   modal.querySelector("[data-off]").addEventListener("click", () => { Store.syncDisconnect(); modal.classList.remove("show"); toast("동기화를 껐어요. 이 기기 기록은 그대로 남아요"); });
 
+  /* ───────── 이름 로그인 (features.login) ─────────
+   * 이름 = 개인 아이디(비밀번호 없음, 인원 제한 없음). 기록은 개인 동기화 공간 sha256(key + ":user:" + 아이디) — 같은 이름이면 어느 기기에서든 이어서
+   * 다른 사람의 진도를 보는 기능은 없음. 로그인하면 '동기화 설정'(공유 코드) 대신 이 공간을 씀 */
+  const USER_KEY = SITE.key + "-user", SPACE_KEY = SITE.key + "-sync-space";
+  const cleanName = n => String(n || "").normalize("NFKC").trim().replace(/\s+/g, " ");
+  function me() { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch (e) { return null; } }
+  async function sha(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); }
+  function clearLocal() {
+    const P = SITE.key + ":", ks = [];
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(P)) ks.push(k); } ks.forEach(k => localStorage.removeItem(k)); localStorage.removeItem(SPACE_KEY); } catch (e) {}
+  }
+  function renderGate(msg) {
+    document.body.classList.add("gate");
+    crumb.innerHTML = esc(SITE.title);
+    main.innerHTML = `<div class="home gate-box">${SITE.eyebrow ? `<p class="eyebrow">${esc(SITE.eyebrow)}</p>` : ""}<h1>${esc(SITE.title)}</h1>
+      <p class="sub">사용할 이름을 정해 주세요. 이 이름이 내 아이디가 되어 필기·읽음 체크·문제 기록이 나에게만 저장됩니다. 다른 기기에서도 같은 이름을 입력하면 이어서 공부할 수 있어요.</p>
+      <form class="gate-form" autocomplete="off"><input name="n" maxlength="20" placeholder="이름 (1~20자)" autocapitalize="off" spellcheck="false" enterkeyhint="go"><button class="pill">시작하기</button></form>
+      <p class="gate-msg" role="status">${msg || ""}</p>
+      <p class="gate-note">비밀번호가 없어서 이름을 아는 사람은 그 이름으로 들어올 수 있어요. 다른 사람과 겹치지 않게 <b>이름+숫자</b>처럼 정하는 걸 추천해요.</p></div>`;
+    main.querySelector(".gate-form").addEventListener("submit", e => { e.preventDefault(); submitName(e.target.n.value, e.target.querySelector("button")); });
+    setTimeout(() => { const i = main.querySelector(".gate-form input"); if (i && window.innerWidth >= 700) i.focus(); }, 50);
+  }
+  async function submitName(raw, btn) {
+    const say = t => { main.querySelector(".gate-msg").textContent = t; };
+    const name = cleanName(raw), id = name.toLowerCase();
+    if (!name || name.length > 20) return say("이름은 1~20자로 정해 주세요.");
+    if (/[:/\\#?]/.test(name)) return say("이름에 : / \\ # ? 는 쓸 수 없어요.");
+    if (!Store.syncAvailable()) return say("이 주소에서는 로그인할 수 없어요 (https 웹 주소에서 열어 주세요).");
+    btn.disabled = true; say("확인 중…");
+    try {
+      const sp = await sha(SITE.key + ":user:" + id);
+      const r = await fetch(`${SITE.syncApi}?space=${sp}&since=0`, { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const used = Object.keys((await r.json()).items || {}).length > 0;
+      if (used && !confirm(`‘${name}’ 이름으로 저장된 기록이 있어요.\n본인이면 확인을 눌러 이어서 공부하세요. 다른 사람이면 취소하고 다른 이름을 정해 주세요.`)) { btn.disabled = false; return say("다른 이름을 입력해 주세요."); }
+    } catch (e) { btn.disabled = false; return say("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요."); }
+    // 로그인 전부터 이 기기에 있던 기록: 옮길지 물어봄 (아니면 지워서 다른 사람 기록과 섞이지 않게)
+    const had = Object.entries(Store.exportAll()).some(([k, v]) => v && v.v != null && /^(checks|goals|quiz|exam|ink:|notes:)/.test(k));
+    if (had && !confirm(`이 기기에 로그인 전 기록(필기·진도 등)이 있어요. ‘${name}’ 계정으로 옮길까요?\n\n다른 사람과 같이 쓰던 기록이면 취소하세요. 이 기기의 기록을 지우고 ‘${name}’의 기록을 불러옵니다.`)) clearLocal();
+    else try { localStorage.removeItem(SPACE_KEY); } catch (e) {}
+    localStorage.setItem(USER_KEY, JSON.stringify({ id, name }));
+    location.hash = "#home"; location.reload(); // 새로 열면서 내 공간에 연결 (아래 시작 부분)
+  }
+  async function logout() {
+    const u = me(); if (!u) return;
+    if (!confirm(`‘${u.name}’에서 로그아웃할까요?\n이 기기에 저장된 기록만 지워지고, 서버의 기록은 남아 있어 같은 이름으로 다시 들어오면 이어서 할 수 있어요.`)) return;
+    Ink.flushSave(); await Store.flushNow().catch(() => {});
+    clearLocal(); try { localStorage.removeItem(USER_KEY); } catch (e) {}
+    location.hash = ""; location.reload();
+  }
+  function renderWho() {
+    const u = me(), foot = document.querySelector(".side-foot");
+    document.getElementById("btn-sync").hidden = true;
+    const w = document.createElement("div"); w.id = "who"; foot.prepend(w);
+    w.innerHTML = `<b>${esc(u.name)}</b> 님<button type="button">로그아웃</button>`;
+    w.querySelector("button").addEventListener("click", logout);
+  }
+
   /* ───────── 라우팅 ───────── */
   function parseHash() { return decodeURIComponent(location.hash).replace(/^#\/?/, "").split(/[./]/); }
   function route() {
@@ -532,6 +665,7 @@
     const L = UNITS.find(l => l.id === id);
     if (L) { crumb.innerHTML = `${esc(L.tag)} · ${esc(L.title)}<small>${esc(L.en || "")}</small>`; renderLecture(L, parts[1]); }
     else if (id === "quiz") { crumb.innerHTML = `연습문제<small>${esc(LB.quizNote)}</small>`; if (!parts[1] && QS && QS.mode === "unit") QS = null; renderQuiz(parts[1]); }
+    else if (id === "exam" && EXAM) { crumb.innerHTML = `모의고사<small>${esc(LB.quizNote)}</small>`; renderExam(parts[1]); }
     else if (id === "calc" && FEAT.calc) { crumb.innerHTML = esc(LB.calcTitle); renderCalc(); }
     else if (id === "dict") { crumb.innerHTML = esc(LB.dictTitle); renderDict(); }
     else if (id === "sources") { crumb.innerHTML = `출처 모음`; renderSources(); }
@@ -552,5 +686,14 @@
   if (Store.get("sideOpen", window.innerWidth >= 1100) === false || window.innerWidth < 900) document.body.classList.add("side-closed");
   const syncLabel = mode => mode === "sync" ? "실시간 동기화 중" : mode === "server" ? "기기 간 동기화 중 (노트북 서버)" : "이 기기에만 저장 · 동기화 설정으로 기기 연결";
   // 먼저 이 기기 저장분으로 그리고, 동기화가 연결되면 최신 내용으로 갱신
-  Promise.all([boot(), Store.init()]).then(([, mode]) => { document.getElementById("sync-state").textContent = syncLabel(mode); if (mode === "sync") route(); });
+  const user = FEAT.login && me();
+  if (FEAT.login && !user) renderGate();
+  else {
+    if (user) renderWho();
+    Promise.all([boot(), Store.init()]).then(async ([, mode]) => {
+      if (user && mode !== "sync") mode = (await Store.syncConnect("user:" + user.id)) ? "sync" : mode; // 로그인한 기기: 내 공간에 연결
+      document.getElementById("sync-state").textContent = user && mode !== "sync" ? "서버 연결 안 됨 — 이 기기에 저장 후 다시 연결" : syncLabel(mode);
+      if (mode === "sync") route();
+    });
+  }
 })();
